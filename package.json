@@ -1,0 +1,20 @@
+{
+  "name": "miart-school",
+  "version": "0.1.0",
+  "description": "미아트스쿨 — 학교·학원용 디지털 미술 수업 플랫폼 (드로잉 스튜디오, 사진/AI 도안, 그림 마음 탐색, 학급 리포트)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "seed": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.11.0",
+    "express": "^5.3.0"
+  }
+}
