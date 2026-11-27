@@ -94,10 +94,11 @@ export async function psychTest({ params }) {
       height: H,
       mode: 'psych',
       title: step.title,
+      breadcrumb: ['그림 마음 탐색', step.title],
       actions: [
         {
           label: '다 그렸어요',
-          icon: glyph('check', 18, 2.4),
+          icon: glyph('check', 20, 2.4),
           primary: true,
           onClick: async () => {
             if (studio.isEmpty() && !(await confirmDialog('아직 아무것도 그리지 않았어요. 이대로 넘어갈까요?', { okLabel: '넘어가기', title: '확인' }))) return;

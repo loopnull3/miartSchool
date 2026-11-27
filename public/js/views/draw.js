@@ -77,14 +77,53 @@ export async function drawPage({ query }) {
     }
   }
 
+  // 나가기 / 경로 이동: 저장 안 한 그림이 있으면 먼저 물어본다
+  function leave(to) {
+    if (!studio.isDirty() || !isStudent) return go(to);
+    modal({
+      title: '저장하지 않은 그림이 있어요',
+      body: h('p', { class: 'muted' }, '저장하면 "내 작품"에서 이어 그릴 수 있어요.'),
+      actions: [
+        { label: '저장 안 하고 나가기', class: 'danger', onClick: () => { studio.markClean(); go(to); } },
+        { label: '저장하고 나가기', class: 'primary', onClick: async () => { if (await save(false)) go(to); else return true; } },
+      ],
+    });
+  }
+
+  // 새 그림으로 저장: 지금 그림을 새 작품으로 복사해 저장하고, 이후에는 새 작품을 이어서 그린다 (자유 그림 전용)
+  async function saveAsNew() {
+    const prevId = artworkId;
+    const prevTitle = studio.getTitle() || title || '내 그림';
+    artworkId = null;
+    if (studio.setTitle) studio.setTitle(`${prevTitle} 사본`.slice(0, 40));
+    if (await save(false)) {
+      toast('새 그림으로 저장했어요', 'ok');
+      history.replaceState(null, '', `#/draw?artwork=${artworkId}`);
+    } else {
+      artworkId = prevId;
+      if (studio.setTitle) studio.setTitle(prevTitle);
+    }
+  }
+
+  const SAVE_AS = '새 그림으로 저장';
   const studentActions = [
-    { label: '임시저장', icon: glyph('download', 18), hideSm: true, onClick: async () => { if (await save(false)) toast('저장했어요. "내 작품"에서 이어 그릴 수 있어요.', 'ok'); } },
+    {
+      label: '저장',
+      icon: glyph('folder', 20),
+      onClick: async () => {
+        if (await save(false)) {
+          toast('저장했어요. "내 작품"에서 이어 그릴 수 있어요.', 'ok');
+          studio.setActionDisabled?.(SAVE_AS, false);
+        }
+      },
+    },
+    assignment ? null : { label: SAVE_AS, icon: glyph('folderPlus', 20), disabled: !artworkId, onClick: saveAsNew },
     {
       label: assignment ? '제출하기' : '선생님께 보내기',
-      icon: glyph('send', 18),
+      icon: glyph('send', 20),
       primary: true,
       onClick: async () => {
-        if (assignment?.closed) return toast('마감된 과제예요. 임시저장은 할 수 있어요.');
+        if (assignment?.closed) return toast('마감된 과제예요. 저장은 할 수 있어요.');
         if (studio.isEmpty()) return toast('아직 그린 게 없어요. 그림을 그려 보세요!');
         modal({
           title: assignment ? '과제를 제출할까요?' : '선생님께 보낼까요?',
@@ -101,8 +140,14 @@ export async function drawPage({ query }) {
         });
       },
     },
-  ];
-  const teacherActions = [{ label: '내려받기', icon: glyph('download', 18), primary: true, onClick: () => downloadDataUrl(studio.exportPNG(), `${studio.getTitle() || '미아트'}.png`) }];
+  ].filter(Boolean);
+  const teacherActions = [{ label: '내려받기', icon: glyph('download', 20), primary: true, onClick: () => downloadDataUrl(studio.exportPNG(), `${studio.getTitle() || '미아트'}.png`) }];
+
+  const breadcrumb = !isStudent
+    ? [{ label: '도안', onClick: () => leave('/templates/builtin') }, '드로잉툴']
+    : assignment
+      ? [{ label: '과제', onClick: () => leave('/s/assignments') }, assignment.title || '드로잉툴']
+      : [{ label: '내 작품', onClick: () => leave('/s/works') }, '드로잉툴'];
 
   const guide = assignment ? { title: assignment.title, description: assignment.description || '', steps: assignment.steps || [] } : null;
   studio = createStudio(wrap, {
@@ -114,20 +159,11 @@ export async function drawPage({ query }) {
     paper: assignment?.paper || undefined,
     guide: guide && (guide.description || guide.steps.length) ? guide : null,
     materials: assignment?.materials || [],
+    breadcrumb,
     title: title || (isStudent ? '' : '드로잉 체험'),
     titleEditable: isStudent,
     actions: isStudent ? studentActions : teacherActions,
-    onExit: async () => {
-      if (!studio.isDirty() || !isStudent) return go(isStudent ? '/s' : '/t');
-      modal({
-        title: '저장하지 않은 그림이 있어요',
-        body: h('p', { class: 'muted' }, '임시저장하면 "내 작품"에서 이어 그릴 수 있어요.'),
-        actions: [
-          { label: '저장 안 하고 나가기', class: 'danger', onClick: () => { studio.markClean(); go('/s'); } },
-          { label: '저장하고 나가기', class: 'primary', onClick: async () => { if (await save(false)) go('/s/works'); else return true; } },
-        ],
-      });
-    },
+    onExit: () => leave(isStudent ? (assignment ? '/s/assignments' : '/s/works') : '/t'),
   });
 
   const beforeUnload = (e) => {
@@ -171,9 +207,10 @@ export async function tryPage({ params, query }) {
         : ['수채화 붓으로 겹쳐 칠하면 색이 진해져요.', '넓은 수채화 붓으로 하늘을 칠해 보세요.', '꽃 브러시로 꽃길을 그려 보세요.'],
     },
     actions: [
-      { label: '내려받기', icon: glyph('download', 18), hideSm: true, onClick: () => downloadDataUrl(studio.exportPNG(), `미아트스쿨-${technique}.png`) },
-      { label: '무료로 시작하기', primary: true, onClick: () => go('/register') },
+      { label: '내려받기', icon: glyph('download', 20), onClick: () => downloadDataUrl(studio.exportPNG(), `미아트스쿨-${technique}.png`) },
+      { label: '무료로 시작하기', icon: glyph('sparkles', 20), primary: true, onClick: () => go('/register') },
     ],
+    breadcrumb: [{ label: '미아트스쿨', onClick: () => go('/') }, technique === 'oil' ? '유화 체험' : '수채화 체험'],
     onExit: () => go('/'),
   });
   onLeave(() => studio.destroy());
