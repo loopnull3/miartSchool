@@ -1,6 +1,6 @@
-// 랜딩 페이지 (Apple 스타일)
+// 랜딩 페이지 (Apple 스타일 · 짧고 차분한 한 페이지)
 import { api } from '../api.js';
-import { h, clear, fill, modal, toast, icon } from '../ui.js';
+import { h, modal, toast } from '../ui.js';
 import { go, homeFor, onLeave } from '../app.js';
 import { SITE } from '/shared/site-config.js';
 import { BUILTIN_TEMPLATES, svgDataUrl } from '../templates.js';
@@ -8,6 +8,7 @@ import { animateColoring } from '../autocolor.js';
 import { appIcon, glyph } from '../icons.js';
 
 const won = (n) => `₩${Number(n).toLocaleString('ko-KR')}`;
+const techLabel = (l) => (l.technique === 'oil' ? '유화' : '수채화');
 
 function scrollToId(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -52,145 +53,91 @@ export function inquiryModal(type = 'purchase') {
   });
 }
 
+// 수업 표지: 도안이 있으면 도안, 없으면 아이콘 (화풍은 카드 아래 한 줄에 적는다)
 function lessonArt(l) {
   const t = l.template && BUILTIN_TEMPLATES.find((x) => x.id === l.template);
   const cover = l.cover || {};
   return h('div', { class: 'lesson-art', style: { background: `linear-gradient(135deg, ${cover.from || '#eef4ff'}, ${cover.to || '#fdeaf3'})` } },
     t ? h('img', { src: svgDataUrl(t.svg), alt: '', loading: 'lazy' }) : h('span', { class: 'lesson-emoji' }, appIcon(l.technique === 'oil' ? 'draw' : 'open', 84)),
-    h('span', { class: 'badge' }, l.technique === 'oil' ? '유화' : '수채화'),
   );
 }
 
+// 수업 카드: 표지 + 제목 + 한 줄 (학년 · 화풍)
 export function lessonCard(l, onClick) {
-  return h('button', { class: 'lesson-card', onclick: onClick },
+  return h('button', { class: 'lesson-card', type: 'button', onclick: onClick },
     lessonArt(l),
     h('div', { class: 'lesson-body' },
       h('div', { class: 'lesson-title' }, l.title),
-      h('div', { class: 'lesson-sum' }, l.summary || ''),
-      h('div', { class: 'lesson-tags' }, [l.grade, l.season, ...(l.subjects || []).slice(0, 2)].filter(Boolean).map((t) => h('span', { class: 'badge' }, t))),
+      h('div', { class: 'lesson-meta muted small' }, [l.grade, techLabel(l)].filter(Boolean).join(' · ')),
     ),
   );
 }
 export { lessonArt };
 
-// 수채화 / 유화 미리보기 애니메이션 (가벼운 자체 렌더링)
-function brushDemo(canvas, kind) {
+// 수채화 · 유화 붓 자국 (한 번만 그리는 정지 그림)
+function brushSample() {
+  const W = 960;
+  const H = 600;
+  const mid = W / 2;
+  const canvas = h('canvas', { width: W, height: H, role: 'img', 'aria-label': '수채화와 유화 붓 자국' });
   const ctx = canvas.getContext('2d');
-  const W = (canvas.width = 640);
-  const H = (canvas.height = 480);
-  let t = 0;
-  let raf = 0;
-  const colors = kind === 'oil' ? ['#1f4e9e', '#f2b134', '#d1495b', '#2a9d8f'] : ['#5ac8fa', '#ff6b4a', '#ffcc00', '#34c759'];
-  const reset = () => {
-    ctx.fillStyle = kind === 'oil' ? '#f3eee4' : '#fff';
-    ctx.fillRect(0, 0, W, H);
-    if (kind === 'oil') {
-      ctx.globalAlpha = 0.06;
-      for (let y = 0; y < H; y += 4) {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, y, W, 1);
-      }
-      ctx.globalAlpha = 1;
-    }
-  };
-  reset();
-  const frame = () => {
-    const lane = Math.floor(t / 160) % 4;
-    const p = (t % 160) / 160;
-    const x = 40 + p * (W - 80);
-    const y = 90 + lane * 100 + Math.sin(p * Math.PI * 2) * 22;
-    const c = colors[lane];
-    if (kind === 'oil') {
-      for (let i = 0; i < 9; i++) {
-        ctx.globalAlpha = 0.5 + Math.random() * 0.5;
-        ctx.fillStyle = c;
-        ctx.fillRect(x - 3, y - 26 + i * 6 + Math.random() * 2, 8, 4);
-      }
-      ctx.globalAlpha = 0.15;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(x - 2, y - 24 + Math.random() * 40, 6, 2);
-    } else {
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const lanes = [160, 300, 440];
+  const wave = (x, x0, y0) => y0 + Math.sin(((x - x0) / (mid - 120)) * Math.PI * 2) * 24;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, mid, H);
+  ctx.fillStyle = '#f3eee4';
+  ctx.fillRect(mid, 0, mid, H);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+  for (let y = 0; y < H; y += 4) ctx.fillRect(mid, y, mid, 1);
+  // 수채화: 번지는 물감
+  ctx.globalCompositeOperation = 'multiply';
+  ['#5ac8fa', '#ff6b4a', '#ffcc00'].forEach((c, k) => {
+    for (let x = 60; x <= mid - 60; x += 7) {
+      const y = wave(x, 60, lanes[k]);
       const g = ctx.createRadialGradient(x, y, 0, x, y, 34);
-      g.addColorStop(0, c + '55');
-      g.addColorStop(0.7, c + '33');
-      g.addColorStop(1, c + '00');
-      ctx.globalCompositeOperation = 'multiply';
+      g.addColorStop(0, `${c}55`);
+      g.addColorStop(0.7, `${c}33`);
+      g.addColorStop(1, `${c}00`);
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(x, y, 34, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
     }
-    ctx.globalAlpha = 1;
-    t += 2;
-    if (t % 640 === 0) {
-      setTimeout(() => {
-        reset();
-        raf = requestAnimationFrame(frame);
-      }, 1400);
-      return;
+  });
+  ctx.globalCompositeOperation = 'source-over';
+  // 유화: 두툼한 붓 터치
+  ['#1f4e9e', '#f2b134', '#d1495b'].forEach((c, k) => {
+    for (let x = mid + 60; x <= W - 60; x += 5) {
+      const y = wave(x, mid + 60, lanes[k]);
+      ctx.fillStyle = c;
+      for (let i = 0; i < 9; i++) {
+        ctx.globalAlpha = 0.5 + rnd() * 0.5;
+        ctx.fillRect(x - 3, y - 26 + i * 6 + rnd() * 2, 8, 4);
+      }
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(x - 2, y - 24 + rnd() * 40, 6, 2);
     }
-    raf = requestAnimationFrame(frame);
-  };
-  raf = requestAnimationFrame(frame);
-  return () => cancelAnimationFrame(raf);
+  });
+  ctx.globalAlpha = 1;
+  return canvas;
 }
 
-// 자동 재생 슬라이드 (일시정지 · 진행 막대 · 이전/다음)
-function featureSlides(slides) {
-  let i = 0;
-  let playing = true;
-  let start = performance.now();
-  const DUR = 5200;
-  const stage = h('div', { class: 'fp-stage' });
-  const bars = slides.map((_, k) => h('button', { 'aria-label': `${k + 1}번째 화면`, onclick: () => show(k) }, h('span')));
-  const playBtn = h('button', { class: 'round-btn', 'aria-label': '일시정지', onclick: () => { playing = !playing; fill(playBtn, icon(playing ? 'pause' : 'play', 16)); playBtn.setAttribute('aria-label', playing ? '일시정지' : '재생'); start = performance.now() - progress * DUR; } }, icon('pause', 16));
-  let progress = 0;
-  const els = slides.map((s) =>
-    h('div', { class: 'fp-slide' },
-      h('div', { class: 'fp-caption' }, s.caption),
-      h('div', { class: 'shot' }, h('img', { src: s.src, alt: s.caption, loading: 'lazy', onerror: (e) => (e.target.closest('.shot').style.display = 'none') })),
+function featureCard({ tint, media, title, text, links }) {
+  return h('article', { class: 'lp-feature' },
+    h('div', { class: 'lp-media', style: { background: tint } }, h('div', { class: 'lp-shot' }, media)),
+    h('div', { class: 'lp-ftext' },
+      h('h3', null, title),
+      h('p', null, text),
+      links ? h('div', { class: 'lp-links' }, links) : null,
     ),
   );
-  stage.append(...els);
-  function show(k) {
-    i = (k + slides.length) % slides.length;
-    els.forEach((e, n) => e.classList.toggle('on', n === i));
-    bars.forEach((b, n) => (b.firstChild.style.width = n < i ? '100%' : '0'));
-    start = performance.now();
-    progress = 0;
-  }
-  let raf = 0;
-  const loop = (now) => {
-    if (playing) {
-      progress = Math.min(1, (now - start) / DUR);
-      bars[i].firstChild.style.width = `${progress * 100}%`;
-      if (progress >= 1) show(i + 1);
-    }
-    raf = requestAnimationFrame(loop);
-  };
-  show(0);
-  raf = requestAnimationFrame(loop);
-  const controls = h('div', { class: 'fp-controls' },
-    playBtn,
-    h('div', { class: 'fp-progress' }, bars),
-    h('button', { class: 'round-btn', 'aria-label': '이전', onclick: () => show(i - 1) }, icon('left')),
-    h('button', { class: 'round-btn', 'aria-label': '다음', onclick: () => show(i + 1) }, icon('right')),
-  );
-  return { el: h('div', null, controls, stage), stop: () => cancelAnimationFrame(raf) };
 }
 
-function countUp(el, target) {
-  const dur = 1200;
-  const t0 = performance.now();
-  const step = (now) => {
-    const p = Math.min(1, (now - t0) / dur);
-    const v = Math.round(target * (1 - Math.pow(1 - p, 3)));
-    el.textContent = v.toLocaleString('ko-KR');
-    if (p < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
+const shot = (src, alt) => h('img', { src, alt, loading: 'lazy', decoding: 'async' });
+const chevLink = (href, label) => h('a', { href }, label, glyph('right', 14, 2.2));
 
 export async function landingPage({ me }) {
   if (me.kind) {
@@ -199,34 +146,34 @@ export async function landingPage({ me }) {
   }
   const stops = [];
   onLeave(() => stops.forEach((f) => f()));
-  const [site, lessons] = await Promise.all([api.get('/public/site').catch(() => ({ stats: {}, testimonials: [] })), api.get('/public/lessons').catch(() => [])]);
+  const [site, lessons] = await Promise.all([api.get('/public/site').catch(() => ({ testimonials: [] })), api.get('/public/lessons').catch(() => [])]);
+  const shownLessons = lessons.slice(0, 6);
+  const reviews = (site.testimonials || []).slice(0, 3);
 
-  // 상단바
+  // 상단바: 메뉴 3개 + 로그인
   const navLinks = [
     ['lessons', '수업 자료'],
-    ['features', '주요 기능'],
-    ['reviews', '이용 후기'],
-    ['pricing', '요금 안내'],
-  ].filter(([id]) => id !== 'reviews' || site.testimonials?.length);
+    ['features', '기능'],
+    ['pricing', '요금'],
+  ].filter(([id]) => id !== 'lessons' || shownLessons.length);
   const bar = h('header', { class: 'topbar' },
     h('div', { class: 'topbar-inner' },
       h('a', { class: 'brand', href: '#/', onclick: (e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); } }, h('img', { src: '/icons/icon.svg', alt: '' }), h('span', null, SITE.brand)),
-      h('nav', { class: 'nav', style: { margin: '0 auto' } }, navLinks.map(([id, label]) => h('a', { href: `#${id}`, onclick: (e) => { e.preventDefault(); scrollToId(id); } }, label))),
-      h('div', { class: 'who' }, h('a', { class: 'btn sm outline', href: '#/student/login' }, '학생 로그인'), h('a', { class: 'btn sm primary', href: '#/login' }, '교사 로그인')),
+      h('nav', { class: 'nav lp-nav', 'aria-label': '랜딩 메뉴' }, navLinks.map(([id, label]) => h('a', { href: `#${id}`, onclick: (e) => { e.preventDefault(); scrollToId(id); } }, label))),
+      h('div', { class: 'who lp-who' }, h('a', { class: 'btn sm outline', href: '#/student/login' }, '학생 로그인'), h('a', { class: 'btn sm primary', href: '#/login' }, '교사 로그인')),
     ),
   );
 
-  // 히어로
+  // 히어로: 도안이 저절로 색칠되는 아이패드
   const screen = h('canvas', { width: 1200, height: 900, 'aria-label': '도안이 자동으로 색칠되는 모습' });
-  const hero = h('section', { class: 'l-hero' },
-    h('span', { class: 'eyebrow' }, '준비는 가볍게, 표현은 풍성하게'),
+  const hero = h('section', { class: 'lp-hero' },
     h('h1', null, '교실에서 시작하는', h('br'), '디지털 미술 수업'),
-    h('p', { class: 'lead' }, '아이패드 하나로 그리고, 나누고, 마음까지 살피는 학교용 창작 플랫폼.'),
-    h('div', { class: 'cta' },
+    h('p', { class: 'lp-lead' }, '아이패드 하나로 그리고, 나누고, 마음까지 살펴요.'),
+    h('div', { class: 'lp-cta' },
       h('a', { class: 'btn primary lg', href: '#/register' }, '무료로 시작하기'),
-      h('a', { class: 'btn link lg chev', href: '#/try/watercolor' }, '지금 그려 보기'),
+      h('a', { class: 'btn lg lp-soft', href: '#/try/watercolor' }, '그려 보기'),
     ),
-    h('div', { class: 'device' }, h('span', { class: 'cam' }), h('div', { class: 'screen' }, screen)),
+    h('div', { class: 'lp-device' }, h('span', { class: 'cam' }), h('div', { class: 'screen' }, screen)),
   );
   const heroSvgs = ['builtin:cat', 'builtin:castle', 'builtin:rocket', 'builtin:sailboat', 'builtin:butterfly']
     .map((id) => BUILTIN_TEMPLATES.find((t) => t.id === id)?.svg)
@@ -242,155 +189,117 @@ export async function landingPage({ me }) {
   io.observe(screen);
   stops.push(() => io.disconnect());
 
-  // 수업 자료
-  const track = h('div', { class: 'carousel-track' });
-  for (const l of lessons.slice(0, 14)) track.append(lessonCard(l, () => lessonPreview(l)));
-  const scrollBy = (d) => track.scrollBy({ left: d * Math.max(280, track.clientWidth * 0.8), behavior: 'smooth' });
-  const lessonsSec = h('section', { class: 'l-section', id: 'lessons', style: { paddingBottom: '70px' } },
-    h('div', { class: 'l-head' }, h('span', { class: 'eyebrow' }, '수업 자료'), h('h2', null, '오늘 수업, 바로 꺼내 쓰세요'), h('p', null, '학년·교과·계절별 수업안과 색칠 도안을 그대로 내 수업으로 가져갈 수 있어요.')),
-    lessons.length ? h('div', { class: 'carousel' }, track, h('div', { class: 'carousel-nav' }, h('button', { class: 'round-btn', 'aria-label': '이전 수업', onclick: () => scrollBy(-1) }, icon('left')), h('button', { class: 'round-btn', 'aria-label': '다음 수업', onclick: () => scrollBy(1) }, icon('right')))) : null,
-  );
-
-  // 주요 기능
-  const oilCanvas = h('canvas');
-  const waterCanvas = h('canvas');
-  stops.push(brushDemo(waterCanvas, 'water'), brushDemo(oilCanvas, 'oil'));
-  const slidesCheckin = featureSlides([
-    { caption: '학생은 오늘의 마음을 날씨로 골라요', src: '/images/landing/checkin-student.jpg' },
-    { caption: '선생님은 달력으로 우리 반 마음을 한눈에', src: '/images/landing/checkin-calendar.jpg' },
-    { caption: '한 달 동안의 마음 변화를 그래프로', src: '/images/landing/checkin-chart.jpg' },
-  ]);
-  const slidesGallery = featureSlides([
-    { caption: '반별·학교별 갤러리보드', src: '/images/landing/boards-list.jpg' },
-    { caption: '친구 작품을 보고 하트로 응원해요', src: '/images/landing/board-detail.jpg' },
-    { caption: '내 작품을 골라 바로 올려요', src: '/images/landing/board-post.jpg' },
-  ]);
-  const slidesLogin = featureSlides([
-    { caption: 'QR 카드를 비추면 바로 로그인', src: '/images/landing/login-qr.jpg' },
-    { caption: '비밀번호 대신 동물과 과일 그림', src: '/images/landing/login-picture.jpg' },
-    { caption: '선생님은 로그인 카드를 한 번에 인쇄', src: '/images/landing/login-cards.jpg' },
-  ]);
-  stops.push(slidesCheckin.stop, slidesGallery.stop, slidesLogin.stop);
-
-  const features = h('section', { class: 'l-section gray', id: 'features' },
-    h('div', { class: 'l-inner' },
-      h('div', { class: 'l-head', style: { marginBottom: '10px' } }, h('h2', null, '선생님의 수업을', h('br'), '더 똑똑하게 도와드려요')),
-      h('div', { class: 'feature-panel blue' },
-        h('span', { class: 'eyebrow' }, '디지털 창작 도구'),
-        h('h3', null, '수채화부터 유화까지, 교실에 꼭 맞춘 도구'),
-        h('p', { class: 'sub' }, '번지는 물감, 두툼한 붓 터치까지. 설치도 결제도 없이 지금 바로 써 보세요.'),
-        h('div', { class: 'try-cards mt-lg' },
-          h('div', { class: 'try-card' }, h('h4', null, '수채화'), waterCanvas, h('a', { class: 'btn primary block mt', href: '#/try/watercolor' }, '체험하기')),
-          h('div', { class: 'try-card' }, h('h4', null, '유화'), oilCanvas, h('a', { class: 'btn primary block mt', href: '#/try/oil' }, '체험하기')),
+  // 수업 자료: 카드 6개
+  const lessonsSec = shownLessons.length
+    ? h('section', { class: 'lp-section', id: 'lessons' },
+        h('div', { class: 'lp-inner' },
+          h('h2', { class: 'lp-title' }, '오늘 수업, 바로 꺼내 쓰세요'),
+          h('div', { class: 'lp-lessons' }, shownLessons.map((l) => lessonCard(l, () => lessonPreview(l)))),
         ),
-        h('div', { class: 'try-guide' },
-          h('div', null, h('span', { class: 'ck' }, glyph('check', 12, 3)), '원하는 화풍의 ', h('b', null, '체험하기'), ' 버튼을 눌러 보세요.'),
-          h('div', null, h('span', { class: 'ck' }, glyph('check', 12, 3)), '회원가입이나 설치 없이 ', h('b', { style: { color: 'var(--primary)' } }, '바로 그릴 수 있어요.')),
-        ),
-      ),
-      h('div', { class: 'feature-panel mint' },
-        h('span', { class: 'eyebrow', style: { color: '#1f9d55' } }, '마음 날씨 체크인'),
-        h('h3', null, '아이들의 마음을 날마다 살펴요'),
-        h('p', { class: 'sub' }, '오늘의 날씨로 기분을 남기면, 달력과 그래프로 변화를 한눈에 볼 수 있어요.'),
-        slidesCheckin.el,
-      ),
-      h('div', { class: 'feature-panel violet' },
-        h('span', { class: 'eyebrow', style: { color: '#8944ab' } }, '갤러리보드'),
-        h('h3', null, '모든 작품이 전시회가 돼요'),
-        h('p', { class: 'sub' }, '우리 반, 우리 학교 보드에 작품을 올리고 서로 응원해요. 보드마다 볼 수 있는 사람을 정할 수 있어요.'),
-        slidesGallery.el,
-      ),
-      h('div', { class: 'feature-panel gray' },
-        h('span', { class: 'eyebrow', style: { color: 'var(--ink-2)' } }, '간편 로그인'),
-        h('h3', null, '개인정보 없이, 카드 한 장으로'),
-        h('p', { class: 'sub' }, 'QR 카드를 비추고 동물과 과일 그림만 고르면 끝. 학생 이메일도 비밀번호도 필요 없어요.'),
-        slidesLogin.el,
+      )
+    : null;
+
+  // 기능: 카드 4장
+  const features = h('section', { class: 'lp-section gray', id: 'features' },
+    h('div', { class: 'lp-inner' },
+      h('h2', { class: 'lp-title' }, '수업에 필요한 것만 담았어요'),
+      h('div', { class: 'lp-features' },
+        featureCard({
+          tint: '#eef4ff',
+          media: brushSample(),
+          title: '수채화·유화 드로잉',
+          text: '번지는 물감도, 두툼한 붓 터치도 설치 없이 바로 그려요.',
+          links: [chevLink('#/try/watercolor', '수채화 그려 보기'), chevLink('#/try/oil', '유화 그려 보기')],
+        }),
+        featureCard({
+          tint: '#e9faf4',
+          media: shot('/images/landing/checkin-calendar.jpg', '마음 날씨 달력 화면'),
+          title: '마음 날씨',
+          text: '오늘 기분을 날씨로 남기면, 우리 반 마음이 달력에 모여요.',
+        }),
+        featureCard({
+          tint: '#f2efff',
+          media: shot('/images/landing/boards-list.jpg', '갤러리보드 목록 화면'),
+          title: '갤러리보드',
+          text: '우리 반, 우리 학교 보드에 작품을 걸고 서로 응원해요.',
+        }),
+        featureCard({
+          tint: '#fff4e5',
+          media: shot('/images/landing/login-picture.jpg', '그림으로 로그인하는 화면'),
+          title: '그림으로 로그인',
+          text: '비밀번호 대신 동물과 과일 그림을 골라 들어와요.',
+        }),
       ),
     ),
   );
 
-  // 통계
-  const s = site.stats || {};
-  const statEls = [
-    [s.schools, '함께하는 학교'],
-    [s.teachers, '선생님'],
-    [s.artworks, '누적 학생 작품'],
-    [s.today, '오늘 올라온 작품'],
-  ].map(([v, l]) => ({ v: v || 0, el: h('div', { class: 'v' }, '0'), l }));
-  const statsSec = h('section', { class: 'l-section' },
-    h('div', { class: 'l-inner' },
-      h('div', { class: 'l-head' }, h('span', { class: 'eyebrow' }, '함께하는 교실'), h('h2', null, '지금 미아트스쿨에서', h('br'), '그려지고 있는 작품들')),
-      h('div', { class: 'stats-row' }, statEls.map((x) => h('div', { class: 's' }, x.el, h('div', { class: 'l' }, x.l)))),
-    ),
-  );
-  const sio = new IntersectionObserver((ents) => {
-    if (ents.some((e) => e.isIntersecting)) {
-      statEls.forEach((x) => countUp(x.el, x.v));
-      sio.disconnect();
-    }
-  });
-  sio.observe(statsSec);
-  stops.push(() => sio.disconnect());
-
-  // 후기
-  const reviews = site.testimonials || [];
-  const reviewCard = (t) => h('div', { class: 'review' }, h('div', { class: 'q' }, t.quote), h('div', { class: 'who2' }, h('b', null, t.name), t.role || ''));
+  // 이용 후기: 있을 때만, 최대 3개
   const reviewsSec = reviews.length
-    ? h('section', { class: 'l-section gray', id: 'reviews' },
-        h('div', { class: 'l-head' }, h('span', { class: 'eyebrow' }, '이용 후기'), h('h2', null, '선생님들의 이야기')),
-        h('div', { class: 'marquee' }, h('div', { class: 'marquee-track' }, [...reviews, ...reviews].map(reviewCard))),
+    ? h('section', { class: 'lp-section', id: 'reviews' },
+        h('div', { class: 'lp-inner' },
+          h('h2', { class: 'lp-title' }, '선생님들의 이야기'),
+          h('div', { class: 'lp-reviews' }, reviews.map((t) =>
+            h('figure', { class: 'lp-review' },
+              h('blockquote', null, t.quote),
+              h('figcaption', null, h('b', null, t.name), t.role ? h('span', null, t.role) : null),
+            ),
+          )),
+        ),
       )
     : null;
 
   // 요금
-  const pricingSec = h('section', { class: 'l-section', id: 'pricing' },
-    h('div', { class: 'l-inner' },
-      h('div', { class: 'l-head' }, h('span', { class: 'eyebrow' }, '요금 안내'), h('h2', null, '학교 예산에 맞춰 유연하게'), h('p', null, SITE.pricing.note)),
-      h('div', { class: 'pricing' },
-        SITE.pricing.plans.map((p) =>
-          h('div', { class: `plan ${p.recommended ? 'rec' : ''}` },
-            p.recommended ? h('span', { class: 'badge primary rec-badge' }, '추천') : null,
-            h('h3', null, p.name),
-            h('div', { class: 'tiers' },
-              p.tiers.map((t) =>
-                h('div', { class: 'tier' },
-                  h('div', { class: 't-label' }, t.label, t.discount ? h('span', { class: 'badge primary' }, t.discount) : null),
-                  h('div', { class: 't-price' }, won(t.price), h('small', null, ` ${SITE.pricing.unit}`)),
-                  t.discount ? h('div', { class: 't-orig' }, won(p.tiers[0].price)) : null,
-                ),
-              ),
-            ),
-            h('ul', null, p.features.map((f) => h('li', null, f))),
-          ),
-        ),
-      ),
-      h('div', { class: 'center mt-lg' }, h('button', { class: 'btn primary lg', onclick: () => inquiryModal('purchase') }, '이용권 문의하기')),
+  const plans = SITE.pricing.plans.map((p) => {
+    const base = p.tiers[0];
+    const discounts = p.tiers.filter((t) => t.discount).map((t) => `${t.label.replace(/^선생님\s*/, '')} ${t.discount}`);
+    return h('div', { class: `lp-plan${p.recommended ? ' rec' : ''}` },
+      h('div', { class: 'lp-plan-head' }, h('h3', null, p.name), p.recommended ? h('span', { class: 'badge primary' }, '추천') : null),
+      h('div', { class: 'lp-plan-for' }, p.audience || base.label),
+      h('div', { class: 'lp-price' }, won(base.price), h('small', null, ` ${SITE.pricing.unit}`)),
+      discounts.length ? h('div', { class: 'lp-discount' }, discounts.join(' · ')) : null,
+      h('ul', null, p.features.map((f) => h('li', null, glyph('check', 14, 2.6), h('span', null, f)))),
+    );
+  });
+  const pricingSec = h('section', { class: 'lp-section', id: 'pricing' },
+    h('div', { class: 'lp-inner' },
+      h('h2', { class: 'lp-title' }, '요금은 간단하게'),
+      h('p', { class: 'lp-sub' }, SITE.pricing.note),
+      h('div', { class: 'lp-plans' }, plans),
+      h('div', { class: 'lp-center' }, h('button', { class: 'btn primary lg', type: 'button', onclick: () => inquiryModal('purchase') }, '이용권 문의하기')),
     ),
   );
 
-  // CTA · 푸터
-  const cta = h('section', { class: 'l-cta' },
-    h('h2', null, '우리 교실의 변화를', h('br'), '지금 확인해 보세요'),
-    h('p', null, '준비 시간은 줄이고, 아이들의 표현 시간은 늘려요.'),
-    h('div', { class: 'row center mt-lg' }, h('a', { class: 'btn primary lg', href: '#/register' }, '무료로 시작하기'), h('button', { class: 'btn lg', style: { background: '#2c2c2e', color: '#fff' }, onclick: () => inquiryModal('idea') }, '아이디어 제안하기')),
+  // 마무리 · 푸터
+  const cta = h('section', { class: 'lp-close' },
+    h('h2', null, '우리 교실에서 시작해 보세요'),
+    h('div', { class: 'lp-cta' },
+      h('a', { class: 'btn primary lg', href: '#/register' }, '무료로 시작하기'),
+      h('button', { class: 'btn lg lp-soft', type: 'button', onclick: () => inquiryModal('idea') }, '아이디어 제안하기'),
+    ),
   );
   const c = SITE.company;
-  const foot = h('footer', { class: 'l-foot' },
-    h('div', { class: 'l-inner' },
-      h('div', { class: 'links' }, h('a', { href: '#/login' }, '교사 로그인'), h('a', { href: '#/student/login' }, '학생 로그인'), h('a', { href: '#/register' }, '가입 신청'), h('a', { href: `mailto:${SITE.contactEmail}` }, '문의하기')),
-      c.name ? h('div', null, [c.name, c.ceo && `대표 ${c.ceo}`, c.bizNo && `사업자등록번호 ${c.bizNo}`, c.address, c.phone].filter(Boolean).join('  ·  ')) : null,
-      h('div', null, `Copyright © ${new Date().getFullYear()} ${SITE.brand} (${SITE.brandEn}). 모든 권리 보유.`),
+  const companyLine = [c.name, c.ceo && `대표 ${c.ceo}`, c.bizNo && `사업자등록번호 ${c.bizNo}`, c.address, c.phone].filter(Boolean).join(' · ');
+  const foot = h('footer', { class: 'lp-foot' },
+    h('div', { class: 'lp-inner' },
+      h('div', { class: 'lp-foot-row' },
+        h('span', null, `© ${new Date().getFullYear()} ${SITE.brand}`),
+        h('nav', { 'aria-label': '바닥글' }, h('a', { href: '#/login' }, '교사 로그인'), h('a', { href: '#/student/login' }, '학생 로그인'), h('a', { href: `mailto:${SITE.contactEmail}` }, '문의하기')),
+      ),
+      c.name ? h('div', { class: 'lp-company' }, companyLine) : null,
     ),
   );
 
   function lessonPreview(l) {
     modal({
       title: l.title,
-      wide: false,
-      body: h('div', null, h('div', { style: { borderRadius: '16px', overflow: 'hidden' } }, lessonArt(l)), h('p', { class: 'muted mt' }, l.summary), h('div', { class: 'lesson-tags' }, [l.grade, l.season, ...(l.subjects || [])].filter(Boolean).map((t) => h('span', { class: 'badge' }, t)))),
+      body: h('div', null,
+        h('div', { style: { borderRadius: '16px', overflow: 'hidden' } }, lessonArt(l)),
+        l.summary ? h('p', { class: 'mt' }, l.summary) : null,
+        h('p', { class: 'muted small' }, [l.grade, l.season, techLabel(l)].filter(Boolean).join(' · ')),
+      ),
       actions: [{ label: '닫기' }, { label: '선생님 로그인하고 사용하기', class: 'primary', onClick: () => go('/login') }],
     });
   }
 
-  return h('div', { class: 'landing' }, bar, hero, lessonsSec, features, statsSec, reviewsSec, pricingSec, cta, foot);
+  return h('div', { class: 'landing' }, bar, hero, lessonsSec, features, reviewsSec, pricingSec, cta, foot);
 }
