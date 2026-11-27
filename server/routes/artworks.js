@@ -132,7 +132,7 @@ r.put('/artworks/:id', (req, res) => {
   if (submit && !image) throw new HttpError(400, '제출할 그림이 없습니다.');
   run(
     `UPDATE artworks SET title = ?, assignment_id = ?, image_file = ?, thumb_file = ?, draft_file = ?, stats_json = COALESCE(?, stats_json),
-            status = ?, submitted_at = CASE WHEN ? AND submitted_at IS NULL THEN ? ELSE submitted_at END, updated_at = datetime('now')
+            technique = ?, status = ?, submitted_at = CASE WHEN ? AND submitted_at IS NULL THEN ? ELSE submitted_at END, updated_at = datetime('now')
       WHERE id = ?`,
     b.title != null ? String(b.title).trim().slice(0, 40) || a.title : a.title,
     b.assignmentId !== undefined ? validAssignment(klass.id, b.assignmentId) : a.assignment_id,
@@ -140,6 +140,7 @@ r.put('/artworks/:id', (req, res) => {
     thumb,
     draft,
     parseStats(b.stats),
+    b.technique === 'oil' || b.technique === 'watercolor' ? b.technique : a.technique || 'watercolor',
     submit ? 'submitted' : 'draft',
     submit ? 1 : 0,
     new Date().toISOString(),

@@ -4,6 +4,7 @@ import { h, toast, toastError, modal, downloadDataUrl } from '../ui.js';
 import { go, onLeave, session } from '../app.js';
 import { createStudio } from '../studio/studio.js';
 import { loadTemplateLayer } from '../templates.js';
+import { glyph } from '../icons.js';
 
 const SIZES = { landscape: [1600, 1200], portrait: [1200, 1600] };
 
@@ -56,7 +57,7 @@ export async function drawPage({ query }) {
         width: W,
         height: H,
         templateRef,
-        technique,
+        technique: studio.getTechnique?.() || technique,
         assignmentId: assignment?.id ?? null,
         image: studio.exportPNG(),
         thumb: studio.thumb(480),
@@ -77,10 +78,10 @@ export async function drawPage({ query }) {
   }
 
   const studentActions = [
-    { label: '임시저장', icon: '💾', hideSm: true, onClick: async () => { if (await save(false)) toast('저장했어요. "내 작품"에서 이어 그릴 수 있어요.', 'ok'); } },
+    { label: '임시저장', icon: glyph('download', 18), hideSm: true, onClick: async () => { if (await save(false)) toast('저장했어요. "내 작품"에서 이어 그릴 수 있어요.', 'ok'); } },
     {
       label: assignment ? '제출하기' : '선생님께 보내기',
-      icon: '📮',
+      icon: glyph('send', 18),
       primary: true,
       onClick: async () => {
         if (assignment?.closed) return toast('마감된 과제예요. 임시저장은 할 수 있어요.');
@@ -90,9 +91,9 @@ export async function drawPage({ query }) {
           body: h('div', { class: 'center' }, h('img', { src: studio.thumb(480), alt: '', style: { maxHeight: '240px', margin: '0 auto', borderRadius: '12px', border: '1px solid var(--line)' } }), h('p', { class: 'muted mt' }, '보낸 뒤에도 "내 작품"에서 다시 고칠 수 있어요.')),
           actions: [
             { label: '조금 더 그릴래요' },
-            { label: '보내기 📮', class: 'primary', onClick: async () => {
+            { label: '보내기', class: 'primary', onClick: async () => {
               if (await save(true)) {
-                toast('선생님께 보냈어요! 🎉', 'ok');
+                toast('선생님께 보냈어요!', 'ok');
                 go('/s/works');
               } else return true;
             } },
@@ -101,13 +102,15 @@ export async function drawPage({ query }) {
       },
     },
   ];
-  const teacherActions = [{ label: '내려받기', icon: '⬇', primary: true, onClick: () => downloadDataUrl(studio.exportPNG(), `${studio.getTitle() || '미아트'}.png`) }];
+  const teacherActions = [{ label: '내려받기', icon: glyph('download', 18), primary: true, onClick: () => downloadDataUrl(studio.exportPNG(), `${studio.getTitle() || '미아트'}.png`) }];
 
   const guide = assignment ? { title: assignment.title, description: assignment.description || '', steps: assignment.steps || [] } : null;
   studio = createStudio(wrap, {
     width: W,
     height: H,
     technique,
+    // 과제는 선생님이 정한 도구(수채화/유화)로 고정, 자유 그림은 설정에서 바꿀 수 있다
+    lockTechnique: !!assignment,
     paper: assignment?.paper || undefined,
     guide: guide && (guide.description || guide.steps.length) ? guide : null,
     materials: assignment?.materials || [],
@@ -145,9 +148,9 @@ export async function drawPage({ query }) {
       .catch(() => toast('도안을 불러오지 못했어요.', 'error'));
   }
   if (draft) await studio.loadDraft(draft);
-  if (assignment?.closed) studio.setHint('⏰ 마감된 과제예요', 4000);
-  else if (assignment?.description) studio.setHint(`📝 ${assignment.description.split('\n')[0]}`, 6000);
-  else if (!draft && templateRef) studio.setHint('🪣 채우기 도구로 톡! 누르면 선 안쪽이 칠해져요', 4000);
+  if (assignment?.closed) studio.setHint('마감된 과제예요', 4000);
+  else if (assignment?.description) studio.setHint(assignment.description.split('\n')[0], 6000);
+  else if (!draft && templateRef) studio.setHint('페인트 채우기로 톡! 누르면 선 안쪽이 칠해져요', 4000);
   return wrap;
 }
 
@@ -168,7 +171,7 @@ export async function tryPage({ params, query }) {
         : ['수채화 붓으로 겹쳐 칠하면 색이 진해져요.', '넓은 수채화 붓으로 하늘을 칠해 보세요.', '꽃 브러시로 꽃길을 그려 보세요.'],
     },
     actions: [
-      { label: '내려받기', icon: '⬇', hideSm: true, onClick: () => downloadDataUrl(studio.exportPNG(), `미아트스쿨-${technique}.png`) },
+      { label: '내려받기', icon: glyph('download', 18), hideSm: true, onClick: () => downloadDataUrl(studio.exportPNG(), `미아트스쿨-${technique}.png`) },
       { label: '무료로 시작하기', primary: true, onClick: () => go('/register') },
     ],
     onExit: () => go('/'),

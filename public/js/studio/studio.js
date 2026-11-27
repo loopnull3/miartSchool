@@ -6,10 +6,9 @@ import { floodFill } from './fill.js';
 import { History } from './history.js';
 import { PALETTE, PSYCH_PALETTE, hexToRgb, rgbToHex, classifyColor, hsl } from './color.js';
 import { PAPERS, PAPER_ORDER, isPaper, drawPaper, paperPreview } from './paper.js';
-import { icon, toolIcon } from './icons.js';
+import { icon, toolIcon, techIcon, iconNameFor, stripEmoji } from './icons.js';
 import { buildMaterialsBody, hasLessonContent } from './materials.js';
-
-const STAMPS = ['⭐', '❤️', '🌸', '🌈', '☀️', '🌙', '🦋', '🐱', '🐶', '🍎', '🎈', '🎀', '✨', '🍀', '🐟', '🚀', '🎵', '🍦'];
+import { STAMP_SHAPES, STAMP_ORDER, drawStamp, stampSvg } from './stamps.js';
 const TOOL_META = {
   fill: { label: '페인트 채우기', short: '채우기' },
   stamp: { label: '도장' },
@@ -69,7 +68,7 @@ export function createStudio(root, opts = {}) {
     sizes: Object.fromEntries(Object.entries(BRUSHES).map(([k, b]) => [k, b.size])),
     opacity: Object.fromEntries(Object.entries(BRUSHES).map(([k, b]) => [k, b.opacity])),
     strength: { smudge: BRUSHES.smudge.strength, rag: BRUSHES.rag.strength },
-    stamp: '⭐',
+    stamp: 'star',
     pressure: true,
     palmReject: true,
     penOnly: !!opts.penOnly,
@@ -84,7 +83,7 @@ export function createStudio(root, opts = {}) {
     panelOpen: wideMQ.matches,
     lastBrush: null,
   };
-  state.sizes.stamp = 90;
+  state.sizes.stamp = 110;
 
   const stats = {
     startedAt: Date.now(),
@@ -170,16 +169,22 @@ export function createStudio(root, opts = {}) {
   const zoomLabel = h('button', { class: 's-zoom', type: 'button', title: '화면에 맞추기', 'aria-label': '화면에 맞추기', onclick: () => fit(true) }, '100%');
   const titleInput = opts.titleEditable
     ? h('input', { class: 's-title-input', value: opts.title || '', maxlength: 40, placeholder: '그림 제목', 'aria-label': '그림 제목', oninput: () => (dirty = true) })
-    : h('span', { class: 's-title' }, opts.title || '');
+    : h('span', { class: 's-title' }, stripEmoji(opts.title || ''));
   const materialsBtn = h('button', { class: 's-btn s-pill materials-btn', type: 'button', title: '수업 자료', 'aria-label': '수업 자료', onclick: () => toggleSheet() }, icon('materials'), h('span', { class: 'lbl' }, '수업 자료'));
   const layersBtn = psych ? null : iconBtn('layers', '레이어', () => openPanel('layers', true), 'hide-phone');
   const settingsBtn = iconBtn('settings', '설정', () => openPanel('settings', true), 'hide-phone');
   const actionsEl = h('div', { class: 's-actions' });
   for (const a of opts.actions || []) {
+    // 아이콘: DOM 노드(예: glyph('send', 18)) · 선 아이콘 이름('save' · 'send' · 'check' · 'download' …).
+    // 그림 문자로 넘어오면 같은 뜻의 선 아이콘으로 바꾸고, 모르는 그림 문자는 보여 주지 않는다
+    let ico = null;
+    if (a.icon instanceof Node) ico = h('span', { class: 'ico', 'aria-hidden': 'true' }, a.icon);
+    else if (iconNameFor(a.icon)) ico = icon(iconNameFor(a.icon), 18);
+    const label = stripEmoji(a.label);
     actionsEl.append(
-      h('button', { class: `btn s-action ${a.primary ? 'primary' : ''} ${a.hideSm ? 'hide-sm' : ''}`, type: 'button', title: a.label, onclick: () => a.onClick(api) },
-        a.icon ? h('span', { class: 'a-ico' }, a.icon) : null,
-        h('span', { class: 'a-lbl' }, a.label)),
+      h('button', { class: `btn s-action ${a.primary ? 'primary' : ''} ${a.hideSm ? 'hide-sm' : ''}`, type: 'button', title: label, 'aria-label': label, onclick: () => a.onClick(api) },
+        ico,
+        h('span', { class: 'a-lbl' }, label)),
     );
   }
   const top = h(
@@ -789,20 +794,15 @@ export function createStudio(root, opts = {}) {
     if (!layer) return;
     if (!layer.visible) return hiddenLayerToast();
     const size = state.sizes.stamp;
-    const pad = size * 0.8;
+    const pad = size * 0.62;
     const rect = clampRect({ x0: pt.x - pad, y0: pt.y - pad, x1: pt.x + pad, y1: pt.y + pad });
     if (!rect) return;
     const before = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
-    layer.ctx.save();
-    layer.ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-    layer.ctx.textAlign = 'center';
-    layer.ctx.textBaseline = 'middle';
-    layer.ctx.fillText(state.stamp, pt.x, pt.y);
-    layer.ctx.restore();
+    drawStamp(layer.ctx, state.stamp, pt.x, pt.y, size, state.color);
     const after = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
     history.push({ layerId: layer.id, rect, before, after });
     stats.stampCount += 1;
-    stats.colors.add('stamp');
+    stats.colors.add(state.color);
     touch(layer);
   }
 
@@ -1261,7 +1261,7 @@ export function createStudio(root, opts = {}) {
       drawSample();
     }
 
-    const usesColor = (brush && !brush.noColor && !brush.rainbow) || t === 'fill' || t === 'picker';
+    const usesColor = (brush && !brush.noColor && !brush.rainbow) || t === 'fill' || t === 'picker' || t === 'stamp';
     if (usesColor) {
       const pal = h('div', { class: 'palette' });
       for (const c of palette) {
@@ -1305,8 +1305,9 @@ export function createStudio(root, opts = {}) {
     }
 
     if (t === 'stamp') {
-      const grid = h('div', { class: 'stamps-grid' }, STAMPS.map((s) => h('button', { class: state.stamp === s ? 'active' : '', type: 'button', 'aria-label': `도장 ${s}`, onclick: () => { state.stamp = s; renderPanel(); } }, s)));
-      inspBody.append(sec('도장 고르기', grid, sliderRow('크기', 24, 260, state.sizes.stamp, (v) => (state.sizes.stamp = v))));
+      const grid = h('div', { class: 'stamps-grid' },
+        STAMP_ORDER.map((k) => h('button', { class: state.stamp === k ? 'active' : '', type: 'button', title: STAMP_SHAPES[k].label, 'aria-label': `도장 ${STAMP_SHAPES[k].label}`, 'aria-pressed': String(state.stamp === k), 'data-stamp': k, onclick: () => { state.stamp = k; renderPanel(); }, html: stampSvg(k, state.color, 30) })));
+      inspBody.append(sec('도장 고르기', grid, sliderRow('크기', 30, 300, state.sizes.stamp, (v) => (state.sizes.stamp = v))));
     }
   }
 
@@ -1375,7 +1376,7 @@ export function createStudio(root, opts = {}) {
     if (!psych && !opts.lockTechnique) {
       const seg = h('div', { class: 'seg wide' });
       for (const [k, tq] of Object.entries(TECHNIQUES)) {
-        seg.append(h('button', { class: `seg-btn ${technique === k ? 'on' : ''}`, type: 'button', onclick: () => setTechnique(k) }, k === 'watercolor' ? '💧 ' : '🎨 ', tq.label));
+        seg.append(h('button', { class: `seg-btn ${technique === k ? 'on' : ''}`, type: 'button', onclick: () => setTechnique(k) }, techIcon(k), tq.label));
       }
       box.append(sec('그리기 방식', seg));
     }
@@ -1750,6 +1751,7 @@ export function createStudio(root, opts = {}) {
   let hintTimer = 0;
   function setHint(text, ms = 0) {
     clearTimeout(hintTimer);
+    text = stripEmoji(text);
     hintEl.textContent = text || '';
     hintEl.classList.toggle('hidden', !text);
     if (text && ms) hintTimer = setTimeout(() => hintEl.classList.add('hidden'), ms);
