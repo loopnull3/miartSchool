@@ -43,11 +43,16 @@ const CHROME = {
   save: '<path d="M12 4v10.5M7.5 10l4.5 4.5 4.5-4.5"/><path d="M4.5 14.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/>',
   send: '<path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/>',
   download: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v8.5M8.5 12.8 12 16.3l3.5-3.5"/>',
+  move: '<path d="M12 3.5v17M3.5 12h17"/><path d="m9.2 6.3 2.8-2.8 2.8 2.8M9.2 17.7l2.8 2.8 2.8-2.8M6.3 9.2 3.5 12l2.8 2.8M17.7 9.2l2.8 2.8-2.8 2.8"/>',
+  fit: '<path d="M4 9V6.5A2.5 2.5 0 0 1 6.5 4H9M15 4h2.5A2.5 2.5 0 0 1 20 6.5V9M20 15v2.5a2.5 2.5 0 0 1-2.5 2.5H15M9 20H6.5A2.5 2.5 0 0 1 4 17.5V15"/>',
+  folder: '<path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  folderPlus: '<path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M12 10.8v5M9.5 13.3h5"/>',
+  chevronRight: '<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>',
   hand: '<path d="M8 12.5V6.8a1.4 1.4 0 0 1 2.8 0V11M10.8 10.5V5.4a1.4 1.4 0 0 1 2.8 0v5.1M13.6 10.6V6.2a1.4 1.4 0 0 1 2.8 0v6"/><path d="M16.4 9.6a1.4 1.4 0 0 1 2.8 0v4.6a6.3 6.3 0 0 1-6.3 6.3h-.6a6 6 0 0 1-4.6-2.2l-3-3.7a1.5 1.5 0 0 1 2.3-1.9L8 14.2"/>',
 };
 
 // 흔히 넘겨받는 그림 문자 아이콘을 선 아이콘으로 바꿔 준다 (호출하는 쪽은 icon: 'save' 처럼 이름을 써도 된다)
-const EMOJI_TO_ICON = { '\u{1F4BE}': 'save', '\u{1F4EE}': 'send', '\u{1F4E4}': 'send', '\u{2709}': 'send', '\u{2705}': 'check', '\u{2714}': 'check', '\u{2B07}': 'download', '\u{1F4E5}': 'download', '\u{270F}': 'pencil', '\u{1F5D1}': 'trash', '\u{21A9}': 'undo' };
+const EMOJI_TO_ICON = { '\u{1F4C1}': 'folder', '\u{1F4C2}': 'folder', '\u{1F4BE}': 'save', '\u{1F4EE}': 'send', '\u{1F4E4}': 'send', '\u{2709}': 'send', '\u{2705}': 'check', '\u{2714}': 'check', '\u{2B07}': 'download', '\u{1F4E5}': 'download', '\u{270F}': 'pencil', '\u{1F5D1}': 'trash', '\u{21A9}': 'undo' };
 export function iconNameFor(v) {
   if (!v) return null;
   if (CHROME[v]) return v;
@@ -257,4 +262,238 @@ const TECH = {
 export function techIcon(key, size = 20) {
   const u = `-${++seq}`;
   return h('span', { class: 'ico tech-ico', 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}">${(TECH[key] || '').replaceAll('{u}', u)}</svg>` });
+}
+
+
+// ---- 서랍 도구 그림 (가로로 누워 오른쪽을 향함, 왼쪽은 화면 밖으로 잘림) ----
+// viewBox 0 0 140 H. 화면에는 오른쪽 60~84px 정도만 보인다. class="tc"는 현재 색.
+const V = (id, stops) => `<linearGradient id="${id}{u}" x1="0" y1="0" x2="0" y2="1">${stops.map(([o, c, a = 1]) => `<stop offset="${o}" stop-color="${c}" stop-opacity="${a}"/>`).join('')}</linearGradient>`;
+const DG = {
+  gl: V('gl', [[0, '#fff', 0.55], [0.36, '#fff', 0.06], [0.62, '#000', 0], [1, '#000', 0.22]]),
+  mt: V('mt', [[0, '#8e949c'], [0.32, '#f4f5f7'], [0.7, '#b9bec6'], [1, '#868c95']]),
+  wd: V('wd', [[0, '#f7dcaf'], [0.45, '#efc68c'], [1, '#c98b4e']]),
+  dk: V('dk', [[0, '#5a5a60'], [0.3, '#3a3a3e'], [1, '#161618']]),
+  bw: V('bw', [[0, '#a36c38'], [0.4, '#8b5a2b'], [1, '#5e3a17']]),
+  cr: V('cr', [[0, '#fffaf0'], [1, '#e7d9bf']]),
+  wh: V('wh', [[0, '#ffffff'], [0.6, '#f2f2f5'], [1, '#d6d6dc']]),
+  or: V('or', [[0, '#ffc561'], [0.55, '#ff9f0a'], [1, '#e07f00']]),
+  sk: V('sk', [[0, '#8fd2ff'], [0.55, '#45acf5'], [1, '#1f86e0']]),
+  mn: V('mn', [[0, '#d2f5da'], [1, '#64c37e']]),
+  pb: V('pb', [[0, '#e0eeff'], [1, '#86b4ee']]),
+  iv: V('iv', [[0, '#fffdf8'], [0.6, '#f3ece0'], [1, '#d9cdb8']]),
+  gs: V('gs', [[0, '#f1f7ff'], [0.5, '#ffffff'], [1, '#cfe0f5']]),
+  pk: V('pk', [[0, '#ffffff'], [1, '#ffd9e0']]),
+  rb: V('rb', [[0, '#ff3b30'], [0.2, '#ff9500'], [0.4, '#ffcc00'], [0.6, '#34c759'], [0.8, '#0a84ff'], [1, '#af52de']]),
+};
+const dd = (...k) => `<defs>${k.map((x) => DG[x]).join('')}</defs>`;
+const du = (k) => `url(#${k}{u})`;
+const f1 = (n) => +n.toFixed(1);
+
+function oilBrush(i) {
+  const b = [4, 5.4, 7, 9, 11.5, 14][i];
+  const H = Math.ceil(2 * b + 14);
+  const cy = H / 2;
+  const th = 4 + b * 0.7;
+  const L = 24 + b * 1.6;
+  const x1 = 90 + L * 0.6;
+  const xe = 90 + L;
+  const xp = 90 + L * 0.4;
+  let lines = '';
+  for (let k = 1; k < 4; k++) {
+    const y = f1(cy - b + (2 * b * k) / 4);
+    lines += `M92 ${y}H${f1(xp + 2)}`;
+  }
+  const body =
+    dd('dk', 'mt', 'cr', 'gl') +
+    `<path d="M-2 ${f1(cy - th / 2)}L70 ${f1(cy - th / 2 - 0.6)}V${f1(cy + th / 2 + 0.6)}L-2 ${f1(cy + th / 2)}Z" fill="${du('dk')}"/>` +
+    `<path d="M2 ${f1(cy - th / 2 + 1)}H66" stroke="#fff" stroke-opacity=".28" stroke-width="1"/>` +
+    `<rect x="70" y="${f1(cy - b - 1)}" width="20" height="${f1(2 * b + 2)}" rx="1.5" fill="${du('mt')}"/><path d="M74 ${f1(cy - b - 1)}V${f1(cy + b + 1)}M77 ${f1(cy - b - 1)}V${f1(cy + b + 1)}" stroke="#7d838c" stroke-width=".7"/>` +
+    `<path d="M90 ${f1(cy - b)}L${f1(x1)} ${f1(cy - b)}Q${f1(xe)} ${f1(cy - b)} ${f1(xe)} ${f1(cy)}Q${f1(xe)} ${f1(cy + b)} ${f1(x1)} ${f1(cy + b)}L90 ${f1(cy + b)}Z" fill="${du('cr')}"/>` +
+    `<path d="${lines}" stroke="#000" stroke-opacity=".08" stroke-width=".7"/>` +
+    `<path class="tc" d="M${f1(xp)} ${f1(cy - b)}L${f1(x1)} ${f1(cy - b)}Q${f1(xe)} ${f1(cy - b)} ${f1(xe)} ${f1(cy)}Q${f1(xe)} ${f1(cy + b)} ${f1(x1)} ${f1(cy + b)}L${f1(xp)} ${f1(cy + b)}Q${f1(xp + 4)} ${f1(cy + b / 2)} ${f1(xp - 1)} ${f1(cy)}Q${f1(xp + 4)} ${f1(cy - b / 2)} ${f1(xp)} ${f1(cy - b)}Z"/>` +
+    `<path d="M${f1(xp)} ${f1(cy - b)}L${f1(x1)} ${f1(cy - b)}Q${f1(xe)} ${f1(cy - b)} ${f1(xe)} ${f1(cy)}Q${f1(xe)} ${f1(cy + b)} ${f1(x1)} ${f1(cy + b)}L${f1(xp)} ${f1(cy + b)}Z" fill="${du('gl')}"/>`;
+  return { h: H, body };
+}
+
+const DRAWER = {
+  pencil: {
+    h: 24,
+    body:
+      dd('wd') +
+      '<rect x="-2" y="4" width="100" height="16" class="tc"/><rect x="-2" y="4" width="100" height="5" fill="#fff" opacity=".28"/><rect x="-2" y="15" width="100" height="5" fill="#000" opacity=".13"/>' +
+      `<path d="M96 4Q100 6 97.2 8.7 100.6 12 97.2 15.3 100 18 96 20L134 12Z" fill="${du('wd')}"/>` +
+      '<path class="tc" d="M122 9.5 134 12 122 14.5Z"/><path d="M122 9.5 134 12 122 14.5Z" fill="#000" opacity=".18"/>',
+  },
+  crayon: {
+    h: 30,
+    body:
+      dd('gl') +
+      '<rect x="-2" y="5" width="104" height="20" rx="3" class="tc"/><rect x="34" y="5" width="56" height="20" fill="#fff" opacity=".95"/>' +
+      '<rect x="38" y="5" width="2.4" height="20" class="tc"/><rect x="42.8" y="5" width="2.4" height="20" class="tc"/><rect x="79" y="5" width="2.4" height="20" class="tc"/><rect x="83.8" y="5" width="2.4" height="20" class="tc"/>' +
+      '<path d="M52 12.5h20M52 17.5h14" stroke="#c7c7cc" stroke-width="1.4" stroke-linecap="round"/>' +
+      `<rect x="-2" y="5" width="104" height="20" rx="3" fill="${du('gl')}"/>` +
+      '<path class="tc" d="M102 6.5 118 8.5Q131 11 134 15 131 19 118 21.5L102 23.5Z"/><path d="M102 6.5 118 8.5Q131 11 134 15 131 19 118 21.5L102 23.5Z" fill="#000" opacity=".1"/><path d="M106 9.6 121 11.4" stroke="#fff" stroke-opacity=".55" stroke-width="1.3" stroke-linecap="round"/>',
+  },
+  pen: {
+    h: 22,
+    body:
+      dd('gl', 'wh') +
+      '<rect x="-2" y="3" width="92" height="16" rx="3" class="tc"/><rect x="40" y="3" width="34" height="16" fill="#fff" opacity=".92"/><rect x="84" y="3" width="6" height="16" fill="#000" opacity=".16"/>' +
+      `<rect x="-2" y="3" width="92" height="16" rx="3" fill="${du('gl')}"/>` +
+      `<path d="M90 4.5 114 8.6V13.4L90 17.5Z" fill="${du('wh')}"/>` +
+      '<path class="tc" d="M113 8.8 128 9.6Q132 11 128 12.4L113 13.2Z"/>',
+  },
+  marker: {
+    h: 28,
+    body:
+      dd('gl', 'wh', 'mt') +
+      `<rect x="-2" y="2" width="90" height="24" rx="5" fill="${du('wh')}" stroke="#d1d1d6" stroke-width=".7"/>` +
+      `<path class="tc" d="M60 2H83A5 5 0 0 1 88 7V21A5 5 0 0 1 83 26H60Z"/><path d="M60 2H83A5 5 0 0 1 88 7V21A5 5 0 0 1 83 26H60Z" fill="${du('gl')}"/>` +
+      '<rect x="18" y="9" width="30" height="10" rx="2" class="tc" opacity=".22"/>' +
+      `<rect x="88" y="6" width="10" height="16" rx="1.5" fill="${du('mt')}"/>` +
+      '<path class="tc" d="M98 7.5 122 9 128 20.5H98Z"/><path d="M100 10 120 11.2" stroke="#fff" stroke-opacity=".45" stroke-width="1.2" stroke-linecap="round"/>',
+  },
+  watercolor: {
+    h: 22,
+    body:
+      dd('iv', 'mt', 'gl') +
+      `<path d="M-2 7 72 6V16L-2 15Z" fill="${du('iv')}"/>` +
+      `<rect x="72" y="5" width="20" height="12" rx="2" fill="${du('mt')}"/><path d="M76 5V17M79 5V17" stroke="#7d838c" stroke-width=".7"/>` +
+      '<path class="tc" d="M92 4.8C106 4.2 122 7 136 11 122 15 106 17.8 92 17.2Z"/>' +
+      `<path d="M92 4.8C106 4.2 122 7 136 11 122 15 106 17.8 92 17.2Z" fill="${du('gl')}"/>`,
+  },
+  watercolorWide: {
+    h: 32,
+    body:
+      dd('pb', 'mt', 'gl') +
+      `<path d="M-2 11.5 66 10.5V21.5L-2 20.5Z" fill="${du('pb')}"/>` +
+      `<path d="M66 7 88 3V29L66 25Z" fill="${du('mt')}"/><path d="M71 6V26M75 5.2V26.8" stroke="#7d838c" stroke-width=".7"/>` +
+      '<path class="tc" d="M88 3H118Q128 3.5 130 9V23Q128 28.5 118 29H88Z"/>' +
+      `<path d="M88 3H118Q128 3.5 130 9V23Q128 28.5 118 29H88Z" fill="${du('gl')}"/>` +
+      '<path d="M92 8.5H124M92 13H127M92 17.5H127M92 22H124" stroke="#fff" stroke-opacity=".22" stroke-width=".9"/>',
+  },
+  flower: {
+    h: 32,
+    body:
+      dd('mn', 'mt') +
+      `<path d="M-2 12.5 74 11.5V20.5L-2 19.5Z" fill="${du('mn')}"/>` +
+      `<rect x="74" y="10.5" width="14" height="11" rx="1.5" fill="${du('mt')}"/>` +
+      '<path class="tc" d="M88 10.4C98 10 105 12.5 111 16 105 19.5 98 22 88 21.6Z"/>' +
+      '<path d="M112 24Q118 30 126 28 120 22 112 24Z" fill="#4cbb62"/>' +
+      [0, 1, 2, 3, 4].map((k) => {
+        const a = -Math.PI / 2 + (k * Math.PI * 2) / 5;
+        const x = f1(124 + Math.cos(a) * 5.6);
+        const y = f1(15 + Math.sin(a) * 5.6);
+        return `<ellipse class="tc" cx="${x}" cy="${y}" rx="5" ry="3.6" transform="rotate(${f1((a * 180) / Math.PI)} ${x} ${y})"/>`;
+      }).join('') +
+      '<circle cx="124" cy="15" r="3.4" fill="#ffcf3a"/><circle cx="122.8" cy="13.8" r="1.1" fill="#fff" opacity=".75"/>',
+  },
+  spray: {
+    h: 38,
+    body:
+      dd('gl', 'mt') +
+      '<rect x="-2" y="5" width="94" height="28" rx="7" class="tc"/><rect x="34" y="5" width="36" height="28" fill="#fff" opacity=".9"/><path d="M42 15h20M42 21h14" class="tcs" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>' +
+      `<rect x="-2" y="5" width="94" height="28" rx="7" fill="${du('gl')}"/>` +
+      `<path d="M92 7Q104 9 104 19 104 29 92 31Z" fill="${du('mt')}"/>` +
+      '<rect x="104" y="14" width="10" height="10" rx="2" fill="#8e8e93"/><circle cx="114" cy="19" r="1.4" fill="#3a3a3c"/>' +
+      [[120, 17, 1.7, 0.85], [125, 21, 1.4, 0.7], [124, 13.5, 1.2, 0.6], [130, 18, 1.4, 0.55], [131, 24, 1.1, 0.45], [135, 14.5, 1, 0.4], [137, 21, 0.9, 0.35], [128, 10.5, 1, 0.4]]
+        .map(([x, y, r, o]) => `<circle class="tc" cx="${x}" cy="${y}" r="${r}" opacity="${o}"/>`).join(''),
+  },
+  rainbow: {
+    h: 22,
+    body:
+      dd('gl', 'wh', 'rb') +
+      ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#0a84ff', '#af52de'].map((c, k) => `<rect x="${f1(-2 + k * 15.34)}" y="3" width="15.6" height="16" fill="${c}"/>`).join('') +
+      `<rect x="-2" y="3" width="92" height="16" fill="${du('gl')}"/>` +
+      `<path d="M90 4.5 114 8.6V13.4L90 17.5Z" fill="${du('wh')}"/>` +
+      `<path d="M113 8.8 128 9.6Q132 11 128 12.4L113 13.2Z" fill="${du('rb')}"/>`,
+  },
+  fill: {
+    h: 42,
+    body:
+      dd('mt') +
+      '<path d="M48 9Q72-5 96 7" stroke="#8e8e93" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+      `<path d="M36 9 104 4V38L36 33Z" fill="${du('mt')}"/><path d="M52 7.8V34.2M88 5.2V36.8" stroke="#000" stroke-opacity=".08"/>` +
+      '<ellipse cx="104" cy="21" rx="5" ry="17" fill="#c7ccd3" stroke="#9aa0a8" stroke-width=".8"/><ellipse class="tc" cx="104.6" cy="21" rx="3.6" ry="14.5"/>' +
+      '<path class="tc" d="M106 27C116 28 120 33 124 37 127 40 133 40 138 38.5V41.5C130 42.5 120 42 110 37 106 35 104 31 106 27Z"/>' +
+      '<path d="M110 30C116 31.5 119 34 121.5 37" stroke="#fff" stroke-opacity=".45" stroke-width="1.2" fill="none" stroke-linecap="round"/>',
+  },
+  stamp: {
+    h: 40,
+    body:
+      dd('wd', 'bw') +
+      `<circle cx="34" cy="20" r="11" fill="${du('wd')}"/><rect x="42" y="14" width="24" height="12" fill="${du('wd')}"/>` +
+      `<rect x="66" y="4" width="36" height="32" rx="5" fill="${du('bw')}"/><rect x="68" y="6" width="32" height="5" rx="2.5" fill="#fff" opacity=".16"/>` +
+      '<rect x="102" y="6" width="7" height="28" rx="1.5" class="tc"/>' +
+      `<path class="tc" d="${starPath(126, 20, 8.4, 3.8)}" opacity=".9"/>`,
+  },
+  lasso: {
+    h: 46,
+    body:
+      '<path d="M-2 36C20 30 40 42 62 36S86 30 92 33" stroke="#c9bba3" stroke-width="4.2" fill="none" stroke-linecap="round"/>' +
+      '<ellipse cx="110" cy="22" rx="24" ry="17" stroke="#c9bba3" stroke-width="4.2" fill="none"/>' +
+      '<path d="M-2 36C20 30 40 42 62 36S86 30 92 33" stroke="#9c8b70" stroke-width="4.2" fill="none" stroke-dasharray="2.4 3" opacity=".55"/>' +
+      '<ellipse cx="110" cy="22" rx="24" ry="17" stroke="#9c8b70" stroke-width="4.2" fill="none" stroke-dasharray="2.4 3" opacity=".55"/>' +
+      '<ellipse cx="110" cy="22" rx="24" ry="17" stroke="#fff" stroke-width="1" fill="none" stroke-dasharray="2.4 3" stroke-dashoffset="1.4" opacity=".5"/>' +
+      '<ellipse cx="91" cy="33" rx="5.6" ry="4.4" fill="#b3a385"/><path d="M88 31.5 94 34.5" stroke="#8a7a60" stroke-width="1"/>',
+  },
+  picker: {
+    h: 24,
+    body:
+      dd('or', 'gl', 'gs', 'mt') +
+      `<rect x="-2" y="2" width="58" height="20" rx="10" fill="${du('or')}"/><rect x="-2" y="2" width="58" height="20" rx="10" fill="${du('gl')}"/>` +
+      `<rect x="56" y="5" width="12" height="14" rx="2" fill="${du('mt')}"/>` +
+      `<path d="M68 6.5 118 9 134 12 118 15 68 17.5Z" fill="${du('gs')}" stroke="#9cb3ce" stroke-width=".7"/>` +
+      '<path class="tc" d="M100 9.9 118 10.6 130.5 12 118 13.4 100 14.1Z"/>',
+  },
+  eraser: {
+    h: 32,
+    body:
+      dd('sk', 'pk', 'gl') +
+      `<rect x="-2" y="3" width="96" height="26" rx="3" fill="${du('sk')}"/><rect x="30" y="3" width="32" height="26" fill="#fff" opacity=".85"/><path d="M36 12.5h20M36 19h13" stroke="#45acf5" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<rect x="-2" y="3" width="96" height="26" rx="3" fill="${du('gl')}" opacity=".7"/>` +
+      `<rect x="92" y="4" width="36" height="24" rx="4" fill="${du('pk')}" stroke="#e6d3d8" stroke-width=".8"/><path d="M96 8H122" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".9"/>`,
+  },
+  smudge: {
+    h: 50,
+    body:
+      dd('dk', 'mt', 'cr') +
+      `<path d="M-2 21 74 20.4V29.6L-2 29Z" fill="${du('dk')}"/><path d="M2 22H70" stroke="#fff" stroke-opacity=".28"/>` +
+      `<path d="M74 19 92 18V32L74 31Z" fill="${du('mt')}"/>` +
+      `<path d="M92 21 128 3A48 48 0 0 1 128 47L92 29Z" fill="${du('cr')}"/>` +
+      [-0.5, -0.33, -0.17, 0, 0.17, 0.33, 0.5].map((t) => `<path d="M93 25L${f1(92 + Math.cos(t) * 44)} ${f1(25 + Math.sin(t) * 44)}" stroke="#000" stroke-opacity=".07" stroke-width=".8"/>`).join('') +
+      '<path d="M128 3A48 48 0 0 1 128 47" class="tcs" stroke-width="5" fill="none" opacity=".35"/>',
+  },
+  rag: {
+    h: 42,
+    body:
+      `<defs>${V('cl', [[0, '#fffaf1'], [1, '#ebdcc2']])}</defs>` +
+      '<path d="M26 10Q50 2 72 9T116 7Q130 6 134 14L136 30Q128 38 112 34T70 36 30 33Q22 22 26 10Z" fill="url(#cl{u})" stroke="#d6c3a3" stroke-width=".9"/>' +
+      '<path d="M30 17Q52 10 74 16T118 14Q128 13 134 19M28 25Q50 18 72 24T116 22Q128 21 135 26" stroke="#e36a6a" stroke-width="1.6" fill="none" opacity=".6"/>' +
+      '<path d="M60 7V34M96 6V35" stroke="#e36a6a" stroke-width="1.2" opacity=".35"/>' +
+      '<ellipse class="tc" cx="114" cy="25" rx="11" ry="5" transform="rotate(-10 114 25)" opacity=".85"/><ellipse class="tc" cx="96" cy="13" rx="5" ry="3" opacity=".55"/>',
+  },
+};
+for (let i = 0; i < 6; i++) DRAWER[`oil:${i + 1}`] = oilBrush(i);
+
+// 서랍에 들어갈 도구 그림 (svg 요소 문자열과 높이)
+export function drawerArt(key) {
+  const d = DRAWER[key];
+  if (!d) return { h: 30, svg: '' };
+  const u = `-d${++seq}`;
+  return { h: d.h, svg: `<svg class="dt-art" viewBox="0 0 140 ${d.h}" width="140" height="${d.h}" aria-hidden="true">${d.body.replaceAll('{u}', u)}</svg>` };
+}
+
+// 미아트스쿨 앱 마크
+export function brandMark(size = 30) {
+  const u = `-b${++seq}`;
+  return h('span', {
+    class: 'brand-mark',
+    'aria-hidden': 'true',
+    html:
+      `<svg viewBox="0 0 512 512" width="${size}" height="${size}"><defs><linearGradient id="bm${u}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f8cff"/><stop offset="1" stop-color="#5e5ce6"/></linearGradient></defs>` +
+      `<rect width="512" height="512" rx="114" fill="url(#bm${u})"/><path d="M256 96c-98 0-174 66-174 150 0 77 61 126 126 126 27 0 36-14 36-30 0-22-19-31-19-50 0-21 17-34 41-34h40c66 0 120-40 120-97 0-40-66-65-170-65z" fill="#fff"/>` +
+      '<circle cx="176" cy="226" r="25" fill="#ff6b4a"/><circle cx="232" cy="166" r="25" fill="#ffcc00"/><circle cx="312" cy="166" r="25" fill="#34c759"/><circle cx="366" cy="222" r="21" fill="#0a84ff"/>' +
+      '<path d="M330 300l92 92c12 12 12 30 0 42s-30 12-42 0l-92-92z" fill="#ffcc00"/><path d="M288 342l42-42 20 20-42 42z" fill="#fff"/></svg>',
+  });
 }

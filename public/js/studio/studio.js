@@ -1,39 +1,54 @@
 // 드로잉 스튜디오: 수채화/유화 기법 · 레이어 · 브러시 · 채우기 · 도장 · 올가미 · 스포이드 · 배경지
 // · 수업 자료 · 확대/이동 · 실행 취소 · 드로잉 통계
+// 화면 구성: 왼쪽 위 앱 마크와 경로, 왼쪽 색 동그라미와 도구 서랍(가로로 누운 도구가 화면 끝에서 삐져나옴),
+// 오른쪽 위 동그란 단추 줄(나가기 · 저장 …), 오른쪽 아래 회색 알약 막대(되돌리기 · 다시하기 · 이동 · 레이어 · 맞춤 · 설정)
 import { h, clear, toast, confirmDialog, switchInput } from '../ui.js';
 import { BRUSHES, OIL_PRESETS, StrokeRenderer, textureCanvas, makeSampler, renderBrushSample, wetEdge } from './brushes.js';
 import { floodFill } from './fill.js';
 import { History } from './history.js';
 import { PALETTE, PSYCH_PALETTE, hexToRgb, rgbToHex, classifyColor, hsl } from './color.js';
 import { PAPERS, PAPER_ORDER, isPaper, drawPaper, paperPreview } from './paper.js';
-import { icon, toolIcon, techIcon, iconNameFor, stripEmoji } from './icons.js';
+import { icon, techIcon, iconNameFor, stripEmoji, drawerArt, brandMark } from './icons.js';
 import { buildMaterialsBody, hasLessonContent } from './materials.js';
 import { STAMP_SHAPES, STAMP_ORDER, drawStamp, stampSvg } from './stamps.js';
+
 const TOOL_META = {
   fill: { label: '페인트 채우기', short: '채우기' },
   stamp: { label: '도장' },
   lasso: { label: '올가미' },
   picker: { label: '스포이드' },
-  hand: { label: '이동' },
 };
+// drawer: 서랍에 놓이는 순서 ('oil:3' = 유화 붓 3호)
 export const TECHNIQUES = {
   watercolor: {
     label: '수채화',
     paper: 'white',
-    tools: ['pencil', 'crayon', 'pen', 'marker', 'watercolor', 'watercolorWide', 'flower', 'spray', 'rainbow', '|', 'fill', 'stamp', 'lasso', 'picker', 'eraser', 'hand'],
+    drawer: ['pencil', 'crayon', 'pen', 'marker', 'watercolor', 'watercolorWide', 'flower', 'spray', 'rainbow', 'fill', 'stamp', 'lasso', 'picker', 'eraser'],
   },
-  oil: { label: '유화', paper: 'canvas', tools: ['oil', 'smudge', 'rag', '|', 'fill', 'lasso', 'picker', 'hand'] },
+  oil: { label: '유화', paper: 'canvas', drawer: ['oil:1', 'oil:2', 'oil:3', 'oil:4', 'oil:5', 'oil:6', 'smudge', 'rag', 'fill', 'lasso', 'picker'] },
 };
-const PSYCH_TOOLS = ['pencil', 'crayon', 'pen', 'eraser', 'hand'];
+for (const t of Object.values(TECHNIQUES)) t.tools = [...new Set(t.drawer.map((it) => (it.startsWith('oil:') ? 'oil' : it)))];
+const PSYCH_DRAWER = ['pencil', 'crayon', 'pen', 'eraser'];
 const TAP_TOOLS = new Set(['fill', 'picker', 'stamp']);
 const MAX_LAYERS = 6;
 const ZOOM_HINT_KEY = 'miart.studio.zoomResetHint';
 const ZOOM_HINT = '두 손가락으로 두 번 톡 하면 원래 크기로 돌아와요';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+const itemTool = (it) => (it.startsWith('oil:') ? 'oil' : it);
+const oilPreset = (it) => OIL_PRESETS[Number(it.slice(4)) - 1];
+
 function meta(t) {
   const m = BRUSHES[t] || TOOL_META[t] || { label: t };
   return { label: m.label, short: m.short || m.label };
+}
+
+function itemMeta(it) {
+  if (it.startsWith('oil:')) {
+    const p = oilPreset(it);
+    return { label: `유화 붓 ${p.label}`, short: p.label };
+  }
+  return meta(it);
 }
 
 function lsGet(k) {
@@ -72,6 +87,7 @@ export function createStudio(root, opts = {}) {
     pressure: true,
     palmReject: true,
     penOnly: !!opts.penOnly,
+    panMode: false,
     scale: 1,
     tx: 0,
     ty: 0,
@@ -79,8 +95,6 @@ export function createStudio(root, opts = {}) {
     recent: [],
     paper: isPaper(opts.paper) ? opts.paper : psych ? 'white' : TECHNIQUES[technique].paper,
     paperAuto: !isPaper(opts.paper),
-    tab: 'brush',
-    panelOpen: wideMQ.matches,
     lastBrush: null,
   };
   state.sizes.stamp = 110;
@@ -162,57 +176,97 @@ export function createStudio(root, opts = {}) {
     return backupCtx;
   }
 
-  // ---------- DOM: 위쪽 막대 ----------
-  const iconBtn = (name, label, onClick, cls = '') => h('button', { class: `s-btn ${cls}`, type: 'button', title: label, 'aria-label': label, onclick: onClick }, icon(name));
-  const undoBtn = iconBtn('undo', '실행 취소', () => undo());
-  const redoBtn = iconBtn('redo', '다시 실행', () => redo());
-  const zoomLabel = h('button', { class: 's-zoom', type: 'button', title: '화면에 맞추기', 'aria-label': '화면에 맞추기', onclick: () => fit(true) }, '100%');
+  // ---------- DOM: 왼쪽 위 (앱 마크 · 경로 · 제목) ----------
+  let crumbs = Array.isArray(opts.breadcrumb) && opts.breadcrumb.length ? opts.breadcrumb : ['드로잉툴'];
+  let titleText = String(opts.title || '');
+  const crumbsEl = h('nav', { class: 'crumbs', 'aria-label': '현재 위치' });
+  const titleMeasure = h('span', { class: 'crumb-measure', 'aria-hidden': 'true' });
   const titleInput = opts.titleEditable
-    ? h('input', { class: 's-title-input', value: opts.title || '', maxlength: 40, placeholder: '그림 제목', 'aria-label': '그림 제목', oninput: () => (dirty = true) })
-    : h('span', { class: 's-title' }, stripEmoji(opts.title || ''));
-  const materialsBtn = h('button', { class: 's-btn s-pill materials-btn', type: 'button', title: '수업 자료', 'aria-label': '수업 자료', onclick: () => toggleSheet() }, icon('materials'), h('span', { class: 'lbl' }, '수업 자료'));
-  const layersBtn = psych ? null : iconBtn('layers', '레이어', () => openPanel('layers', true), 'hide-phone');
-  const settingsBtn = iconBtn('settings', '설정', () => openPanel('settings', true), 'hide-phone');
-  const actionsEl = h('div', { class: 's-actions' });
-  for (const a of opts.actions || []) {
-    // 아이콘: DOM 노드(예: glyph('send', 18)) · 선 아이콘 이름('save' · 'send' · 'check' · 'download' …).
-    // 그림 문자로 넘어오면 같은 뜻의 선 아이콘으로 바꾸고, 모르는 그림 문자는 보여 주지 않는다
-    let ico = null;
-    if (a.icon instanceof Node) ico = h('span', { class: 'ico', 'aria-hidden': 'true' }, a.icon);
-    else if (iconNameFor(a.icon)) ico = icon(iconNameFor(a.icon), 18);
-    const label = stripEmoji(a.label);
-    actionsEl.append(
-      h('button', { class: `btn s-action ${a.primary ? 'primary' : ''} ${a.hideSm ? 'hide-sm' : ''}`, type: 'button', title: label, 'aria-label': label, onclick: () => a.onClick(api) },
-        ico,
-        h('span', { class: 'a-lbl' }, label)),
-    );
+    ? h('input', {
+        class: 'crumb-input', value: titleText, maxlength: 40, placeholder: '제목 없음', 'aria-label': '그림 제목', enterkeyhint: 'done',
+        oninput: (e) => {
+          titleText = e.target.value;
+          dirty = true;
+          sizeTitle();
+          const mirror = popEl.querySelector('.title-field');
+          if (mirror && mirror !== e.target) mirror.value = titleText;
+        },
+        onkeydown: (e) => e.key === 'Enter' && e.target.blur(),
+      })
+    : null;
+  const brand = h('div', { class: 's-brand' }, brandMark(30), crumbsEl, titleMeasure);
+
+  function sizeTitle() {
+    if (!titleInput) return;
+    titleMeasure.textContent = titleInput.value || titleInput.placeholder;
+    titleInput.style.width = `${Math.ceil(titleMeasure.offsetWidth) + 14}px`;
   }
-  const top = h(
-    'header',
-    { class: 'studio-top' },
-    h('div', { class: 's-left' }, iconBtn('back', '나가기', () => opts.onExit?.(api), 'back-btn'), titleInput),
-    h('div', { class: 's-right' },
-      h('div', { class: 's-group' }, undoBtn, redoBtn),
-      h('div', { class: 's-group zoom-group' }, iconBtn('zoomOut', '축소', () => zoomCenter(1 / 1.25), 'hide-narrow'), zoomLabel, iconBtn('zoomIn', '확대', () => zoomCenter(1.25), 'hide-narrow')),
-      h('div', { class: 's-group' }, materialsBtn, layersBtn, settingsBtn),
-      actionsEl,
-    ),
-  );
 
-  // ---------- DOM: 도구 팔레트 · 속성 패널 · 시트 ----------
-  const toolsEl = h('div', { class: 'tp-tools', role: 'toolbar', 'aria-label': '그리기 도구' });
-  const colorWell = h('button', { class: 'color-well', type: 'button', title: '색 · 굵기', 'aria-label': '색과 굵기 패널 열기', onclick: () => openPanel('brush', true) }, h('span', { class: 'cw-inner' }));
-  const paletteEl = h('nav', { class: 'tool-palette' }, toolsEl, colorWell);
-  const toolButtons = {};
+  // 경로의 마지막 칸이 제목과 같으면 그 칸이 곧 제목(눌러서 이름 바꾸기). 아니면 제목을 맨 끝에 덧붙인다
+  function renderCrumbs() {
+    clear(crumbsEl);
+    const items = crumbs.map((c) => (typeof c === 'string' ? { label: c } : c)).filter((c) => c && c.label);
+    const shownTitle = stripEmoji(titleText);
+    const last = items[items.length - 1];
+    const merge = last && !last.onClick && shownTitle && stripEmoji(last.label) === shownTitle;
+    const list = merge ? items.slice(0, -1) : items;
+    const sep = () => h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, icon('chevronRight', 15));
+    list.forEach((c, i) => {
+      if (i) crumbsEl.append(sep());
+      const label = stripEmoji(c.label);
+      crumbsEl.append(c.onClick ? h('button', { class: 'crumb link', type: 'button', onclick: () => c.onClick(api) }, label) : h('span', { class: 'crumb' }, label));
+    });
+    let tail = null;
+    if (titleInput) tail = h('label', { class: 'crumb title-crumb editable', title: '눌러서 제목 바꾸기' }, titleInput);
+    else if (shownTitle && (merge || !last || stripEmoji(last.label) !== shownTitle)) tail = h('span', { class: 'crumb title-crumb' }, shownTitle);
+    if (tail) {
+      if (list.length) crumbsEl.append(sep());
+      crumbsEl.append(tail);
+    }
+    requestAnimationFrame(sizeTitle);
+  }
 
-  const tabsEl = h('div', { class: 'seg insp-tabs', role: 'tablist' });
-  const inspBody = h('div', { class: 'insp-body' });
-  const inspector = h('aside', { class: 'inspector', 'aria-label': '속성 패널' },
-    h('div', { class: 'insp-head' }, psych ? h('strong', { class: 'insp-title' }, '색과 굵기') : tabsEl,
-      h('button', { class: 's-btn sm insp-close', type: 'button', title: '닫기', 'aria-label': '패널 닫기', onclick: () => setPanelOpen(false) }, icon('close', 18))),
-    inspBody,
-  );
+  // ---------- DOM: 왼쪽 (색 동그라미 · 도구 서랍) ----------
+  const colorWell = h('button', { class: 'color-well', type: 'button', title: '색 고르기', 'aria-label': '색 고르기', onclick: () => togglePop('color', colorWell, 'right') }, h('span', { class: 'cw-inner' }));
+  const drawerEl = h('div', { class: 'drawer', role: 'toolbar', 'aria-label': '그리기 도구', 'aria-orientation': 'vertical' });
+  const leftEl = h('div', { class: 's-left' }, colorWell, drawerEl);
 
+  // ---------- DOM: 오른쪽 위 동그란 단추 (나가기 · 호출하는 쪽 단추 · 수업 자료) ----------
+  function roundBtn({ label, ico, primary, disabled, onClick, cls = '' }) {
+    return h('button', { class: `rb ${primary ? 'primary' : ''} ${cls}`, type: 'button', title: label, 'aria-label': label, disabled: !!disabled, onclick: onClick },
+      h('span', { class: 'rb-c' }, ico),
+      h('span', { class: 'rb-l' }, label));
+  }
+  const actionsCol = h('div', { class: 's-actions' });
+  actionsCol.append(roundBtn({ label: '나가기', ico: icon('close', 20), onClick: () => opts.onExit?.(api), cls: 'exit' }));
+  const actionButtons = [];
+  for (const a of opts.actions || []) {
+    // 아이콘: DOM 노드(예: glyph('folder', 20)) · 선 아이콘 이름 · 알려진 그림 문자(같은 뜻의 선 아이콘으로 바꿈)
+    let ico = null;
+    if (a.icon instanceof Node) ico = a.icon;
+    else if (iconNameFor(a.icon)) ico = icon(iconNameFor(a.icon), 20);
+    else ico = icon(a.primary ? 'check' : 'folder', 20);
+    const label = stripEmoji(a.label);
+    const b = roundBtn({ label, ico, primary: a.primary, disabled: a.disabled, onClick: () => a.onClick?.(api) });
+    actionButtons.push({ label: a.label, shown: label, b });
+    actionsCol.append(b);
+  }
+  const materialsBtn = roundBtn({ label: '수업 자료', ico: icon('materials', 20), onClick: () => toggleSheet(), cls: 'materials-btn' });
+  actionsCol.append(materialsBtn);
+
+  // ---------- DOM: 오른쪽 아래 알약 막대 ----------
+  const pbtn = (name, label, onClick, cls = '') => h('button', { class: `pb ${cls}`, type: 'button', title: label, 'aria-label': label, onclick: onClick }, icon(name, 22));
+  const undoBtn = pbtn('undo', '되돌리기', () => undo());
+  const redoBtn = pbtn('redo', '다시하기', () => redo());
+  const panBtn = pbtn('move', '이동', () => setPanMode(!state.panMode), 'pan');
+  const layersBtn = psych ? null : pbtn('layers', '레이어', () => togglePop('layers', layersBtn, 'left'), 'layers');
+  const fitBtn = pbtn('fit', '화면 맞춤', () => fit(true), 'fit');
+  const settingsBtn = pbtn('settings', '설정', () => togglePop('settings', settingsBtn, 'left'), 'settings');
+  const pill = h('div', { class: 's-pill', role: 'toolbar', 'aria-label': '편집' }, undoBtn, redoBtn, panBtn, layersBtn, fitBtn, settingsBtn);
+  const zoomBadge = h('div', { class: 'zoom-badge', 'aria-hidden': 'true' }, '100%');
+
+  // ---------- DOM: 팝오버 · 수업 자료 시트 · 안내 ----------
+  const popEl = h('div', { class: 'pop', role: 'dialog' });
   const sheetBody = h('div', { class: 'sheet-scroll' });
   const sheet = h('aside', { class: 'sheet', 'aria-label': '수업 자료', 'aria-hidden': 'true' },
     h('div', { class: 'sheet-head' }, h('h3', null, icon('materials', 20), '수업 자료'), h('button', { class: 's-btn sm', type: 'button', title: '닫기', 'aria-label': '수업 자료 닫기', onclick: () => toggleSheet(false) }, icon('close', 18))),
@@ -227,7 +281,7 @@ export function createStudio(root, opts = {}) {
     h('button', { class: 'sel-btn primary', type: 'button', onclick: () => commitSelection() }, icon('check', 18), '완료'),
   );
 
-  const el = h('div', { class: 'studio', 'data-mode': mode }, viewport, top, paletteEl, inspector, sheet, hintEl, selBar);
+  const el = h('div', { class: 'studio', 'data-mode': mode }, viewport, brand, leftEl, actionsCol, pill, zoomBadge, sheet, popEl, hintEl, selBar);
   root.append(el);
 
   // ---------- 레이어 ----------
@@ -282,30 +336,41 @@ export function createStudio(root, opts = {}) {
   }
 
   // ---------- 좌표 · 확대 ----------
+  let zoomReady = false;
+  let shownScale = 0;
+  let zoomTimer = 0;
   function applyTransform() {
     stage.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
-    zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
+    stage.style.setProperty('--s', String(state.scale));
+    if (Math.abs(state.scale - shownScale) > 1e-4) showZoom();
     updateAnts();
+  }
+
+  // 확대율이 바뀌면 잠깐 % 표시
+  function showZoom(force = false) {
+    shownScale = state.scale;
+    zoomBadge.textContent = `${Math.round(state.scale * 100)}%`;
+    if (!zoomReady && !force) return;
+    zoomBadge.classList.add('on');
+    clearTimeout(zoomTimer);
+    zoomTimer = setTimeout(() => zoomBadge.classList.remove('on'), 900);
   }
 
   function isWide() {
     return wideMQ.matches;
   }
 
-  // 위쪽 막대 · 도구 팔레트 · (넓은 화면에서 펼친) 패널을 피해서 맞춘다
+  // 왼쪽 서랍 · 위쪽 경로 · 오른쪽 단추 줄과 알약 막대를 피해서 가운데에 맞춘다
   function fitInsets() {
     const vw = viewport.clientWidth;
     const vh = viewport.clientHeight;
-    let l = 14;
-    let t = 14;
-    let r = 14;
-    let b = 14;
-    t = Math.max(t, top.offsetHeight + 14);
-    if (paletteEl.offsetWidth && paletteEl.offsetHeight) {
-      if (paletteEl.offsetHeight >= paletteEl.offsetWidth) l = Math.max(l, paletteEl.offsetLeft + paletteEl.offsetWidth + 14);
-      else b = Math.max(b, vh - paletteEl.offsetTop + 14);
-    }
-    if (state.panelOpen && isWide() && inspector.offsetWidth) r = Math.max(r, vw - inspector.offsetLeft + 14);
+    const phone = vw <= 600;
+    const gap = phone ? 8 : 18;
+    const l = leftEl.offsetLeft + leftEl.offsetWidth + (phone ? 2 : 6);
+    const rightEdge = Math.min(actionsCol.offsetLeft || vw, pill.offsetLeft || vw);
+    let r = vw - rightEdge + gap;
+    const t = brand.offsetTop + brand.offsetHeight + (phone ? 10 : 8);
+    const b = phone ? 14 : 24;
     if (sheet.classList.contains('open') && isWide() && sheet.offsetWidth) r = Math.max(r, vw - sheet.offsetLeft + 14);
     return { l, t, r, b, vw, vh };
   }
@@ -327,7 +392,10 @@ export function createStudio(root, opts = {}) {
     state.scale = s;
     state.tx = ox + (aw - W * s) / 2;
     state.ty = oy + (ah - H * s) / 2;
-    if (manual) state.autoFit = true;
+    if (manual) {
+      state.autoFit = true;
+      showZoom(true);
+    }
     applyTransform();
   }
 
@@ -350,12 +418,11 @@ export function createStudio(root, opts = {}) {
     return { x: (clientX - r.left - state.tx) / state.scale, y: (clientY - r.top - state.ty) / state.scale };
   }
 
-  const ro = new ResizeObserver(() => state.autoFit && fit());
+  const ro = new ResizeObserver(() => {
+    if (state.autoFit) fit();
+    positionPop();
+  });
   ro.observe(viewport);
-  const onWideChange = () => {
-    setPanelOpen(isWide());
-  };
-  wideMQ.addEventListener?.('change', onWideChange);
 
   // ---------- 포인터 ----------
   const pointers = new Map();
@@ -385,7 +452,10 @@ export function createStudio(root, opts = {}) {
 
   function onDown(e) {
     e.preventDefault();
-    if (!isWide() && state.panelOpen) setPanelOpen(false);
+    if (suppressDown === e.pointerId) {
+      suppressDown = null;
+      return;
+    }
     try {
       viewport.setPointerCapture(e.pointerId);
     } catch {
@@ -414,7 +484,7 @@ export function createStudio(root, opts = {}) {
     }
     if (gesture || gestureLinger) return;
     if (isTouch && !state.penOnly && penSeen && state.palmReject) return;
-    const wantsPan = state.tool === 'hand' || spaceDown || e.button === 1 || (isTouch && state.penOnly);
+    const wantsPan = state.panMode || spaceDown || e.button === 1 || (isTouch && state.penOnly);
     if (wantsPan) {
       pan = { id: e.pointerId, x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty };
       viewport.classList.add('panning');
@@ -569,7 +639,7 @@ export function createStudio(root, opts = {}) {
 
   function updateCursor(e) {
     const b = BRUSHES[state.tool];
-    if (e.pointerType === 'touch' || !b || stroke?.type === 'touch') {
+    if (e.pointerType === 'touch' || !b || stroke?.type === 'touch' || state.panMode || pan) {
       cursor.style.display = 'none';
       return;
     }
@@ -1066,7 +1136,13 @@ export function createStudio(root, opts = {}) {
 
   // ---------- 키보드 ----------
   function onKey(e) {
-    if (destroyed || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (destroyed) return;
+    // Esc는 입력 칸에 있어도 팝오버를 닫는다
+    if (e.type === 'keydown' && e.key === 'Escape' && pop) {
+      closePop();
+      return;
+    }
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault();
@@ -1080,10 +1156,17 @@ export function createStudio(root, opts = {}) {
       spaceDown = e.type === 'keydown';
       e.preventDefault();
     } else if (e.type === 'keydown' && e.key === 'Escape') {
-      if (sel || lassoDraw) cancelSelection();
+      if (pop) closePop();
+      else if (sel || lassoDraw) cancelSelection();
       else if (sheet.classList.contains('open')) toggleSheet(false);
     } else if (e.type === 'keydown' && e.key === 'Enter' && sel) {
       commitSelection();
+    } else if (e.type === 'keydown' && (e.key === '[' || e.key === ']') && state.tool === 'oil') {
+      // 유화 붓은 호수 단위로
+      const i = OIL_PRESETS.findIndex((p) => p.size === state.sizes.oil);
+      const j = Math.max(0, Math.min(OIL_PRESETS.length - 1, (i < 0 ? 2 : i) + (e.key === ']' ? 1 : -1)));
+      state.sizes.oil = OIL_PRESETS[j].size;
+      renderPanel();
     } else if (e.type === 'keydown' && (e.key === '[' || e.key === ']') && BRUSHES[state.tool]) {
       const b = BRUSHES[state.tool];
       const v = Math.round(state.sizes[state.tool] * (e.key === ']' ? 1.15 : 1 / 1.15));
@@ -1094,40 +1177,69 @@ export function createStudio(root, opts = {}) {
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);
 
-  // ---------- 도구 · 색 ----------
+  // ---------- 도구 서랍 · 색 ----------
+  function drawerItems() {
+    return psych ? PSYCH_DRAWER : TECHNIQUES[technique].drawer;
+  }
+
   function toolList() {
-    return psych ? PSYCH_TOOLS : TECHNIQUES[technique].tools;
+    return [...new Set(drawerItems().map(itemTool))];
   }
 
   function defaultTool() {
     return toolList()[0];
   }
 
-  function buildPalette() {
-    clear(toolsEl);
-    for (const k of Object.keys(toolButtons)) delete toolButtons[k];
-    const list = toolList();
-    paletteEl.classList.toggle('many', list.filter((t) => t !== '|').length > 9);
-    for (const t of list) {
-      if (t === '|') {
-        toolsEl.append(h('div', { class: 'tp-sep', role: 'separator' }));
-        continue;
-      }
-      const m = meta(t);
-      const btn = h('button', { class: 'tool-btn', type: 'button', title: m.label, 'aria-label': m.label, 'data-tool': t, onclick: () => onToolClick(t) }, toolIcon(t), h('span', { class: 't-label' }, m.short));
-      toolButtons[t] = btn;
-      toolsEl.append(btn);
-    }
-    for (const [k, b] of Object.entries(toolButtons)) b.classList.toggle('active', k === state.tool);
+  const drawerBtns = new Map();
+
+  function itemActive(it) {
+    if (it.startsWith('oil:')) return state.tool === 'oil' && state.sizes.oil === oilPreset(it).size;
+    return state.tool === it;
   }
 
-  function onToolClick(t) {
-    // 이미 고른 도구를 한 번 더 누르면 속성 패널을 연다/닫는다
-    if (t === state.tool && t !== 'hand') {
-      openPanel('brush', true);
+  function buildDrawer() {
+    clear(drawerEl);
+    drawerBtns.clear();
+    for (const it of drawerItems()) {
+      const m = itemMeta(it);
+      const art = drawerArt(it);
+      const b = h('button', { class: 'dt', type: 'button', title: m.label, 'aria-label': m.label, 'data-item': it, onclick: () => onDrawerClick(it), html: art.svg });
+      b.style.setProperty('--h', `${art.h}px`);
+      b.append(h('span', { class: 'dt-tip', 'aria-hidden': 'true' }, m.label));
+      // 손가락으로 길게 누르면 이름표
+      let lp = 0;
+      b.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        clearTimeout(lp);
+        lp = setTimeout(() => {
+          b.classList.add('tip');
+          setTimeout(() => b.classList.remove('tip'), 1400);
+        }, 450);
+      });
+      for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => clearTimeout(lp));
+      drawerBtns.set(it, b);
+      drawerEl.append(b);
+    }
+    syncDrawer();
+  }
+
+  function syncDrawer() {
+    for (const [it, b] of drawerBtns) {
+      const on = itemActive(it);
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+
+  // 고른 도구를 한 번 더 누르면 옆에 옵션 팝오버
+  function onDrawerClick(it) {
+    if (itemActive(it) && !state.panMode) {
+      togglePop('tool', drawerBtns.get(it), 'right');
       return;
     }
-    setTool(t);
+    closePop();
+    if (it.startsWith('oil:')) state.sizes.oil = oilPreset(it).size;
+    setTool(itemTool(it));
   }
 
   function setTool(t) {
@@ -1138,11 +1250,30 @@ export function createStudio(root, opts = {}) {
     }
     state.tool = t;
     if (BRUSHES[t] && !BRUSHES[t].direct) state.lastBrush = t;
-    for (const [k, b] of Object.entries(toolButtons)) b.classList.toggle('active', k === t);
+    if (state.panMode) setPanMode(false);
     el.dataset.tool = t;
-    viewport.style.cursor = t === 'hand' ? 'grab' : TAP_TOOLS.has(t) ? 'copy' : 'crosshair';
-    state.tab = 'brush';
+    updateViewportCursor();
     renderPanel();
+    // 고른 도구가 서랍에서 보이도록
+    const b = [...drawerBtns.entries()].find(([it]) => itemActive(it))?.[1];
+    b?.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  function updateViewportCursor() {
+    const t = state.tool;
+    viewport.style.cursor = state.panMode ? 'grab' : TAP_TOOLS.has(t) ? 'copy' : 'crosshair';
+  }
+
+  function setPanMode(v) {
+    state.panMode = !!v;
+    panBtn.classList.toggle('on', state.panMode);
+    panBtn.setAttribute('aria-pressed', String(state.panMode));
+    el.classList.toggle('pan-mode', state.panMode);
+    if (state.panMode) {
+      cancelLassoDraw();
+      cursor.style.display = 'none';
+    }
+    updateViewportCursor();
   }
 
   function cancelLassoDraw() {
@@ -1157,7 +1288,7 @@ export function createStudio(root, opts = {}) {
     state.recent = [hex, ...state.recent.filter((x) => x !== hex)].slice(0, 6);
     updateColorWell();
     const b = BRUSHES[state.tool];
-    if ((b && b.noColor) || state.tool === 'picker' || state.tool === 'hand' || state.tool === 'lasso') setTool(state.lastBrush || defaultTool());
+    if ((b && b.noColor) || state.tool === 'picker' || state.tool === 'lasso') setTool(state.lastBrush || defaultTool());
     else renderPanel();
   }
 
@@ -1167,40 +1298,83 @@ export function createStudio(root, opts = {}) {
     el.style.setProperty('--tc-edge', l > 0.86 ? 'rgba(0,0,0,.28)' : 'transparent');
   }
 
-  // ---------- 속성 패널 ----------
-  function setPanelOpen(open) {
-    state.panelOpen = open;
-    inspector.classList.toggle('open', open);
-    el.classList.toggle('panel-open', open);
-    colorWell.classList.toggle('on', open);
-    if (open) renderPanel();
-    if (state.autoFit && isWide()) requestAnimationFrame(() => fit());
+  function renderPanel() {
+    updateColorWell();
+    syncDrawer();
+    renderPop();
   }
 
-  function openPanel(tab, toggle = false) {
-    if (psych) tab = 'brush';
-    if (toggle && state.panelOpen && state.tab === tab) {
-      setPanelOpen(false);
+  // ---------- 팝오버 (색 · 도구 옵션 · 레이어 · 설정) ----------
+  let pop = null;
+  let suppressDown = null;
+
+  function togglePop(kind, anchor, side) {
+    if (pop && pop.kind === kind && pop.anchor === anchor) {
+      closePop();
       return;
     }
-    state.tab = tab;
-    toggleSheet(false);
-    setPanelOpen(true);
-    if (psych && tab === 'settings') inspBody.querySelector('.settings-sec')?.scrollIntoView({ block: 'nearest' });
+    openPop(kind, anchor, side);
   }
 
-  const TABS = [
-    ['brush', '브러시'],
-    ['layers', '레이어'],
-    ['paper', '종이'],
-    ['settings', '설정'],
-  ];
-  function renderTabs() {
-    if (psych) return;
-    clear(tabsEl);
-    for (const [k, label] of TABS) {
-      tabsEl.append(h('button', { class: `seg-btn ${state.tab === k ? 'on' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(state.tab === k), onclick: () => { state.tab = k; renderPanel(); } }, label));
-    }
+  function openPop(kind, anchor, side) {
+    if (pop) pop.anchor.classList.remove('pop-anchor');
+    pop = { kind, anchor, side };
+    anchor.classList.add('pop-anchor');
+    if (!isWide() && sheet.classList.contains('open')) toggleSheet(false);
+    renderPop();
+  }
+
+  function closePop() {
+    if (!pop) return;
+    pop.anchor.classList.remove('pop-anchor');
+    pop = null;
+    sampleCanvas = null;
+    popEl.classList.remove('open');
+    clear(popEl);
+  }
+
+  function renderPop() {
+    if (!pop) return;
+    const prevScroll = popEl.querySelector('.pop-body')?.scrollTop || 0;
+    clear(popEl);
+    sampleCanvas = null;
+    popEl.className = `pop open side-${pop.side} kind-${pop.kind}`;
+    const body = h('div', { class: 'pop-body' });
+    if (pop.kind === 'color') buildColorPop(body);
+    else if (pop.kind === 'tool') buildToolPop(body);
+    else if (pop.kind === 'layers') buildLayersPop(body);
+    else buildSettingsPop(body);
+    popEl.append(h('span', { class: 'pop-arrow', 'aria-hidden': 'true' }), body);
+    positionPop();
+    body.scrollTop = prevScroll;
+  }
+
+  function positionPop() {
+    if (!pop) return;
+    const er = el.getBoundingClientRect();
+    const a = pop.anchor.getBoundingClientRect();
+    const vw = er.width;
+    const vh = er.height;
+    popEl.style.left = '0px';
+    popEl.style.top = '0px';
+    const pw = popEl.offsetWidth;
+    const ph = popEl.offsetHeight;
+    const ay = a.top - er.top + a.height / 2;
+    let x = pop.side === 'right' ? a.right - er.left + 12 : a.left - er.left - 12 - pw;
+    x = Math.max(8, Math.min(vw - pw - 8, x));
+    let y = Math.max(8, Math.min(vh - ph - 8, ay - ph / 2));
+    popEl.style.left = `${x}px`;
+    popEl.style.top = `${y}px`;
+    popEl.style.setProperty('--ay', `${Math.max(18, Math.min(ph - 18, ay - y))}px`);
+  }
+
+  // 팝오버 밖을 누르면 닫고, 캔버스를 누른 것이면 그 터치로는 그리지 않는다
+  function onDocDown(e) {
+    if (!pop) return;
+    const t = e.target;
+    if (popEl.contains(t) || pop.anchor.contains(t) || t.closest?.('.modal-back')) return;
+    closePop();
+    if (viewport.contains(t)) suppressDown = e.pointerId;
   }
 
   const sec = (title, ...children) => h('section', { class: 'insp-sec' }, title ? h('h4', null, title) : null, ...children);
@@ -1234,80 +1408,43 @@ export function createStudio(root, opts = {}) {
     });
   }
 
-  function renderPanel() {
-    updateColorWell();
-    renderTabs();
-    if (!state.panelOpen) return;
-    clear(inspBody);
-    sampleCanvas = null;
-    const tab = psych ? 'brush' : state.tab;
-    if (tab === 'brush') renderBrushTab();
-    else if (tab === 'layers') renderLayersTab();
-    else if (tab === 'paper') renderPaperTab();
-    else renderSettingsTab();
-    if (psych) renderSettingsTab(true);
+  function buildColorPop(body) {
+    const pal = h('div', { class: 'palette' });
+    for (const c of palette) {
+      pal.append(h('button', { class: `swatch ${state.color === c ? 'active' : ''}`, type: 'button', style: { background: c }, title: c, 'aria-label': `색 ${c}`, onclick: () => setColor(c) }));
+    }
+    if (!psych) {
+      const picker = h('input', { type: 'color', value: state.color, 'aria-label': '다른 색 고르기', onchange: (e) => setColor(e.target.value) });
+      pal.append(h('label', { class: 'swatch custom', title: '다른 색' }, picker));
+    }
+    const recent = state.recent.filter((c) => !palette.includes(c));
+    body.append(h('div', { class: 'pop-head' }, h('strong', null, '색깔'), h('span', { class: 'cc', style: { background: state.color } })), pal);
+    if (recent.length) {
+      body.append(h('div', { class: 'recent' }, h('span', { class: 'tiny muted' }, '최근'), recent.map((c) => h('button', { class: `swatch sm ${state.color === c ? 'active' : ''}`, type: 'button', style: { background: c }, 'aria-label': `최근 색 ${c}`, onclick: () => setColor(c) }))));
+    }
   }
 
-  function renderBrushTab() {
+  function buildToolPop(body) {
     const t = state.tool;
     const brush = BRUSHES[t];
-    const m = meta(t);
-    const head = h('div', { class: 'tool-head' }, toolIcon(t), h('div', null, h('strong', null, m.label), h('small', null, toolTip(t))));
-    inspBody.append(head);
+    const preset = t === 'oil' ? OIL_PRESETS.find((p) => p.size === state.sizes.oil) : null;
+    body.append(h('div', { class: 'pop-head col' }, h('strong', null, preset ? `유화 붓 ${preset.label}` : meta(t).label), h('small', null, toolTip(t))));
     if (brush) {
       sampleCanvas = canvasEl(520, 112);
       sampleCanvas.className = 'brush-sample';
-      inspBody.append(sampleCanvas);
+      body.append(sampleCanvas);
       drawSample();
+      const s = h('section', { class: 'insp-sec' });
+      if (t !== 'oil') s.append(sliderRow('굵기', brush.min, brush.max, state.sizes[t], (v) => { state.sizes[t] = v; drawSample(); }));
+      if (brush.strength != null) s.append(sliderRow('세기', 10, 100, Math.round(state.strength[t] * 100), (v) => { state.strength[t] = v / 100; drawSample(); }, '%'));
+      else if (!brush.erase && !psych) s.append(sliderRow('진하기', 10, 100, Math.round(state.opacity[t] * 100), (v) => { state.opacity[t] = v / 100; drawSample(); }, '%'));
+      if (s.childNodes.length) body.append(s);
+      if (t === 'oil') body.append(h('p', { class: 'pop-note' }, '붓 크기는 왼쪽에서 1호~6호 붓을 바꿔 골라요.'));
     }
-
-    const usesColor = (brush && !brush.noColor && !brush.rainbow) || t === 'fill' || t === 'picker' || t === 'stamp';
-    if (usesColor) {
-      const pal = h('div', { class: 'palette' });
-      for (const c of palette) {
-        pal.append(h('button', { class: `swatch ${state.color === c ? 'active' : ''}`, type: 'button', style: { background: c }, title: c, 'aria-label': `색 ${c}`, onclick: () => setColor(c) }));
-      }
-      if (!psych) {
-        const picker = h('input', { type: 'color', value: state.color, 'aria-label': '다른 색 고르기', onchange: (e) => setColor(e.target.value) });
-        pal.append(h('label', { class: 'swatch custom', title: '다른 색' }, picker));
-      }
-      const recent = state.recent.filter((c) => !palette.includes(c));
-      inspBody.append(
-        sec('색깔',
-          pal,
-          recent.length ? h('div', { class: 'recent' }, h('span', { class: 'tiny muted' }, '최근'), recent.map((c) => h('button', { class: `swatch sm ${state.color === c ? 'active' : ''}`, type: 'button', style: { background: c }, 'aria-label': `최근 색 ${c}`, onclick: () => setColor(c) }))) : null,
-        ),
-      );
-    }
-
-    if (brush) {
-      const s = sec(t === 'oil' ? '붓 크기 (호수)' : brush.strength != null ? '크기와 세기' : brush.erase || psych ? '크기' : '굵기와 진하기');
-      if (t === 'oil') {
-        const chips = h('div', { class: 'preset-chips' });
-        for (const p of OIL_PRESETS) {
-          const on = state.sizes.oil === p.size;
-          chips.append(
-            h('button', { class: `preset ${on ? 'on' : ''}`, type: 'button', 'aria-pressed': String(on), onclick: () => { state.sizes.oil = p.size; renderPanel(); } },
-              h('span', { class: 'preset-dot', style: { width: `${Math.min(26, 4 + p.size * 0.36)}px`, height: `${Math.min(26, 4 + p.size * 0.36)}px` } }),
-              p.label),
-          );
-        }
-        s.append(chips);
-      } else {
-        s.append(sliderRow('굵기', brush.min, brush.max, state.sizes[t], (v) => { state.sizes[t] = v; drawSample(); }));
-      }
-      if (brush.strength != null) {
-        s.append(sliderRow('세기', 10, 100, Math.round(state.strength[t] * 100), (v) => { state.strength[t] = v / 100; drawSample(); }, '%'));
-      } else if (!brush.erase && !psych) {
-        s.append(sliderRow('진하기', 10, 100, Math.round(state.opacity[t] * 100), (v) => { state.opacity[t] = v / 100; drawSample(); }, '%'));
-      }
-      inspBody.append(s);
-    }
-
     if (t === 'stamp') {
       const grid = h('div', { class: 'stamps-grid' },
-        STAMP_ORDER.map((k) => h('button', { class: state.stamp === k ? 'active' : '', type: 'button', title: STAMP_SHAPES[k].label, 'aria-label': `도장 ${STAMP_SHAPES[k].label}`, 'aria-pressed': String(state.stamp === k), 'data-stamp': k, onclick: () => { state.stamp = k; renderPanel(); }, html: stampSvg(k, state.color, 30) })));
-      inspBody.append(sec('도장 고르기', grid, sliderRow('크기', 30, 300, state.sizes.stamp, (v) => (state.sizes.stamp = v))));
+        STAMP_ORDER.map((k) => h('button', { class: state.stamp === k ? 'active' : '', type: 'button', title: STAMP_SHAPES[k].label, 'aria-label': `도장 ${STAMP_SHAPES[k].label}`, 'aria-pressed': String(state.stamp === k), 'data-stamp': k, onclick: () => { state.stamp = k; renderPop(); }, html: stampSvg(k, state.color, 30) })));
+      body.append(sec('도장 고르기', grid, sliderRow('크기', 30, 300, state.sizes.stamp, (v) => (state.sizes.stamp = v))));
     }
   }
 
@@ -1323,73 +1460,80 @@ export function createStudio(root, opts = {}) {
       spray: '뿌려지는 작은 점들',
       rainbow: '그으면 색이 바뀌어요',
       oil: '두껍고 결이 살아 있는 물감',
-      smudge: '손가락으로 문질러 섞어요',
+      smudge: '부채 붓으로 물감을 문질러 섞어요',
       rag: '헝겊으로 물감을 살살 닦아요',
       eraser: '그린 것을 지워요',
       fill: '선 안쪽을 톡 눌러 한 번에 칠해요',
       stamp: '톡 누른 곳에 도장을 찍어요',
       lasso: '빙 둘러 고른 뒤 끌어서 옮겨요',
       picker: '그림에서 색을 콕 집어 와요',
-      hand: '끌어서 그림을 움직여요',
     }[t] || '';
   }
 
-  function renderLayersTab() {
+  function buildLayersPop(body) {
     renderLayerList();
-    inspBody.append(
-      sec('레이어',
-        layerListEl,
-        h('div', { class: 'layer-actions' },
-          h('button', { class: 'pill-btn', type: 'button', onclick: () => { commitSelection(); if (addLayer()) dirty = true; } }, icon('plus', 18), '새 레이어'),
-          h('button', { class: 's-btn sm', type: 'button', title: '위로', 'aria-label': '레이어 위로', onclick: () => moveLayer(1) }, icon('up', 18)),
-          h('button', { class: 's-btn sm', type: 'button', title: '아래로', 'aria-label': '레이어 아래로', onclick: () => moveLayer(-1) }, icon('down', 18)),
-          h('button', { class: 's-btn sm danger', type: 'button', title: '레이어 삭제', 'aria-label': '레이어 삭제', onclick: deleteLayer }, icon('trash', 18)),
-        ),
-        h('button', { class: 'text-btn', type: 'button', onclick: clearLayer }, '이 레이어 모두 지우기'),
+    body.append(
+      h('div', { class: 'pop-head' }, h('strong', null, '레이어')),
+      layerListEl,
+      h('div', { class: 'layer-actions' },
+        h('button', { class: 'pill-btn', type: 'button', onclick: () => { commitSelection(); if (addLayer()) dirty = true; } }, icon('plus', 18), '새 레이어'),
+        h('button', { class: 's-btn sm', type: 'button', title: '위로', 'aria-label': '레이어 위로', onclick: () => moveLayer(1) }, icon('up', 18)),
+        h('button', { class: 's-btn sm', type: 'button', title: '아래로', 'aria-label': '레이어 아래로', onclick: () => moveLayer(-1) }, icon('down', 18)),
+        h('button', { class: 's-btn sm danger', type: 'button', title: '레이어 삭제', 'aria-label': '레이어 삭제', onclick: deleteLayer }, icon('trash', 18)),
       ),
+      h('button', { class: 'text-btn', type: 'button', onclick: clearLayer }, '이 레이어 모두 지우기'),
     );
   }
 
-  function renderPaperTab() {
-    const grid = h('div', { class: 'paper-grid' });
-    for (const k of PAPER_ORDER) {
-      const p = PAPERS[k];
-      const prev = paperPreview(k, 120, 84);
-      prev.className = 'paper-thumb';
-      grid.append(h('button', { class: `paper-opt ${state.paper === k ? 'on' : ''}`, type: 'button', 'aria-pressed': String(state.paper === k), onclick: () => choosePaper(k) }, prev, h('span', null, p.label)));
+  function buildSettingsPop(body) {
+    body.append(h('div', { class: 'pop-head' }, h('strong', null, '설정')));
+    if (titleInput) {
+      const field = h('input', {
+        class: 'input title-field', value: titleText, maxlength: 40, placeholder: '그림 제목', 'aria-label': '그림 제목',
+        oninput: (e) => {
+          titleText = e.target.value;
+          titleInput.value = titleText;
+          dirty = true;
+          sizeTitle();
+        },
+      });
+      body.append(sec('제목', field));
     }
-    inspBody.append(sec('배경지', grid));
+    if (!psych) {
+      const grid = h('div', { class: 'paper-grid' });
+      for (const k of PAPER_ORDER) {
+        const prev = paperPreview(k, 120, 84);
+        prev.className = 'paper-thumb';
+        grid.append(h('button', { class: `paper-opt ${state.paper === k ? 'on' : ''}`, type: 'button', 'aria-pressed': String(state.paper === k), 'data-paper': k, onclick: () => choosePaper(k) }, prev, h('span', null, PAPERS[k].label)));
+      }
+      body.append(sec('종이', grid));
+    }
     if (templateCanvas) {
       const visible = tplEl.style.display !== 'none';
       const op = Math.round(Number(tplEl.style.opacity || 1) * 100);
-      inspBody.append(
+      body.append(
         sec('스케치 교재(도안)',
           setRow('도안 선 보이기', '채우기는 도안 선을 경계로 칠해요', visible, (v) => { tplEl.style.display = v ? '' : 'none'; dirty = true; }),
           sliderRow('선 진하기', 15, 100, op, (v) => { tplEl.style.opacity = String(v / 100); dirty = true; }, '%'),
         ),
       );
     }
-  }
-
-  function renderSettingsTab(inline = false) {
-    const box = inline ? h('div', { class: 'settings-sec' }) : inspBody;
     if (!psych && !opts.lockTechnique) {
       const seg = h('div', { class: 'seg wide' });
       for (const [k, tq] of Object.entries(TECHNIQUES)) {
-        seg.append(h('button', { class: `seg-btn ${technique === k ? 'on' : ''}`, type: 'button', onclick: () => setTechnique(k) }, techIcon(k), tq.label));
+        seg.append(h('button', { class: `seg-btn ${technique === k ? 'on' : ''}`, type: 'button', 'data-technique': k, onclick: () => setTechnique(k) }, techIcon(k), tq.label));
       }
-      box.append(sec('그리기 방식', seg));
+      body.append(sec('그리기 방식', seg));
     }
-    box.append(
-      sec(inline ? '설정' : '펜과 터치',
+    body.append(
+      sec('펜과 터치',
         setRow('펜으로만 그리기', '손가락은 그림을 움직이고 확대만 해요', state.penOnly, (v) => { state.penOnly = v; el.classList.toggle('pen-only', v); }),
         setRow('펜 필압 사용', '애플펜슬처럼 누르는 힘을 느끼는 펜', state.pressure, (v) => (state.pressure = v)),
         setRow('손바닥 터치 무시', '펜을 쓰는 동안 닿은 손바닥은 그리지 않아요', state.palmReject, (v) => (state.palmReject = v)),
       ),
+      h('p', { class: 'tip-note' }, icon('sparkle', 16), h('span', null, ZOOM_HINT)),
+      h('button', { class: 'danger-btn', type: 'button', onclick: () => resetCanvas() }, icon('reset', 18), '모두 지우고 다시 그리기'),
     );
-    if (!inline) box.append(h('p', { class: 'tip-note' }, icon('sparkle', 16), h('span', null, ZOOM_HINT)));
-    box.append(h('button', { class: 'danger-btn', type: 'button', onclick: () => resetCanvas() }, icon('reset', 18), psych ? '모두 지우고 다시 그리기' : '캔버스 초기화'));
-    if (inline) inspBody.append(box);
   }
 
   function renderLayerList() {
@@ -1495,10 +1639,17 @@ export function createStudio(root, opts = {}) {
     technique = t;
     el.dataset.technique = t;
     if (state.paperAuto && state.paper === prevDefault) setPaper(TECHNIQUES[t].paper, { silent: true });
-    buildPalette();
+    buildDrawer();
+    updateLayersButton();
     setTool(toolList().includes(state.tool) ? state.tool : defaultTool());
-    state.tab = 'settings';
-    renderPanel();
+  }
+
+  // 레이어 단추는 수채화에서만
+  function updateLayersButton() {
+    if (!layersBtn) return;
+    const show = technique === 'watercolor';
+    layersBtn.classList.toggle('hidden', !show);
+    if (!show && pop?.kind === 'layers') closePop();
   }
 
   function setPaper(kind, { silent = false } = {}) {
@@ -1558,7 +1709,7 @@ export function createStudio(root, opts = {}) {
 
   // ---------- 수업 자료 ----------
   function updateMaterialsButton() {
-    const has = hasLessonContent(guide, materials);
+    const has = !psych && hasLessonContent(guide, materials);
     materialsBtn.classList.toggle('hidden', !has);
     if (!has) toggleSheet(false);
   }
@@ -1571,10 +1722,10 @@ export function createStudio(root, opts = {}) {
 
   function toggleSheet(open) {
     const want = open ?? !sheet.classList.contains('open');
-    if (want && !hasLessonContent(guide, materials)) return;
+    if (want && (psych || !hasLessonContent(guide, materials))) return;
     if (want) {
       if (!sheetBuilt) buildSheet();
-      if (!isWide()) setPanelOpen(false);
+      closePop();
     }
     sheet.classList.toggle('open', want);
     sheet.setAttribute('aria-hidden', String(!want));
@@ -1760,7 +1911,8 @@ export function createStudio(root, opts = {}) {
   function destroy() {
     destroyed = true;
     ro.disconnect();
-    wideMQ.removeEventListener?.('change', onWideChange);
+    document.removeEventListener('pointerdown', onDocDown, true);
+    clearTimeout(zoomTimer);
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('keyup', onKey);
     if (raf) cancelAnimationFrame(raf);
@@ -1776,11 +1928,16 @@ export function createStudio(root, opts = {}) {
   el.classList.toggle('pen-only', state.penOnly);
   setPaper(state.paper, { silent: true });
   addLayer(psych ? '그림' : '레이어 1');
-  buildPalette();
+  renderCrumbs();
+  buildDrawer();
   setTool(defaultTool());
-  setPanelOpen(state.panelOpen);
+  updateLayersButton();
   updateMaterialsButton();
-  requestAnimationFrame(() => fit());
+  document.addEventListener('pointerdown', onDocDown, true);
+  requestAnimationFrame(() => {
+    fit();
+    zoomReady = true;
+  });
 
   const api = {
     el,
@@ -1793,7 +1950,7 @@ export function createStudio(root, opts = {}) {
     getStats,
     getDraft,
     loadDraft,
-    getTitle: () => (opts.titleEditable ? titleInput.value.trim() : opts.title || ''),
+    getTitle: () => (titleInput ? titleInput.value.trim() : titleText),
     isDirty: () => dirty,
     markClean: () => (dirty = false),
     isEmpty: () => pixelStats().inkRatio === 0,
@@ -1816,8 +1973,24 @@ export function createStudio(root, opts = {}) {
       el.classList.toggle('pen-only', state.penOnly);
       renderPanel();
     },
+    setPanMode,
     resetCanvas,
     fitView: () => fit(true),
+    // 이름(label)으로 오른쪽 단추를 켜고 끈다
+    setActionDisabled: (label, disabled) => {
+      for (const a of actionButtons) if (a.label === label || a.shown === label) a.b.disabled = !!disabled;
+    },
+    setTitle: (text) => {
+      titleText = String(text ?? '');
+      if (titleInput) titleInput.value = titleText;
+      const mirror = popEl.querySelector('.title-field');
+      if (mirror) mirror.value = titleText;
+      renderCrumbs();
+    },
+    setBreadcrumb: (list) => {
+      crumbs = Array.isArray(list) && list.length ? list : ['드로잉툴'];
+      renderCrumbs();
+    },
   };
   return api;
 }
