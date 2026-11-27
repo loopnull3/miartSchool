@@ -4,12 +4,13 @@ import { h, clear, fill, toast, toastError, modal, confirmDialog, emptyState, lo
 import { go, shell, session } from '../app.js';
 import { BUILTIN_TEMPLATES, svgDataUrl, svgToPng, canvasThumb } from '../templates.js';
 import { photoToLineArt, fileToImage } from '../photo-sketch.js';
+import { appIcon, glyph } from '../icons.js';
 
 const TABS = [
-  ['builtin', '🖼️ 기본 도안'],
-  ['photo', '📷 사진으로 만들기'],
-  ['ai', '✨ AI로 만들기'],
-  ['mine', '📁 내 도안'],
+  ['builtin', '기본 도안', 'templates'],
+  ['photo', '사진으로 만들기', 'camera'],
+  ['ai', 'AI로 만들기', 'ai'],
+  ['mine', '내 도안', 'works'],
 ];
 const CATEGORIES = ['전체', '동물', '자연', '탈것', '생활', '상상', '패턴'];
 const AI_EXAMPLES = ['우주를 나는 고래', '생일 케이크를 든 공룡', '꽃밭의 고양이', '바닷속 성', '로봇 친구', '구름 위 기차'];
@@ -21,7 +22,7 @@ export async function templatesPage({ params }) {
     h('div', null,
       h('h1', null, '도안 만들기'),
       h('p', { class: 'muted' }, session.me.kind === 'student' ? '마음에 드는 도안을 골라 색칠하거나, 사진·AI로 나만의 도안을 만들어요.' : '기본 도안을 쓰거나, 사진·AI로 만든 도안을 저장해 과제에 활용하세요.'),
-      h('nav', { class: 'tabs' }, TABS.map(([k, label]) => h('a', { href: `#/templates/${k}`, class: k === tab ? 'active' : '' }, label))),
+      h('nav', { class: 'tabs' }, TABS.map(([k, label, ic]) => h('a', { href: `#/templates/${k}`, class: k === tab ? 'active' : '', style: { display: 'inline-flex', alignItems: 'center', gap: '8px' } }, appIcon(ic, 22), label))),
       content,
     ),
     { active: 'templates' },
@@ -58,7 +59,7 @@ async function builtinTab(root) {
       modal({
         title: t.title,
         body: h('img', { src: svgDataUrl(t.svg), alt: t.title, style: { width: '100%', background: '#fff', borderRadius: '14px', border: '1px solid var(--line)' } }),
-        actions: [{ label: '닫기' }, { label: '🖍️ 이 도안으로 그리기', class: 'primary', onClick: () => go(`/draw?template=${encodeURIComponent(t.id)}`) }],
+        actions: [{ label: '닫기' }, { label: '이 도안으로 그리기', class: 'primary', onClick: () => go(`/draw?template=${encodeURIComponent(t.id)}`) }],
       });
     }),
   );
@@ -77,8 +78,8 @@ async function photoTab(root) {
   const thick = h('input', { type: 'range', min: 1, max: 5, value: 2, 'aria-label': '선 굵기' });
   const detailVal = h('span', { class: 'num' }, '50');
   const thickVal = h('span', { class: 'num' }, '2');
-  const before = h('div', { class: 'sketch-box' }, h('div', { class: 'center muted' }, h('div', { style: { fontSize: '44px' } }, '📷'), '사진을 골라 주세요'));
-  const after = h('div', { class: 'sketch-box' }, h('div', { class: 'center muted' }, h('div', { style: { fontSize: '44px' } }, '✏️'), '여기에 도안이 나타나요'));
+  const before = h('div', { class: 'sketch-box' }, h('div', { class: 'center muted' }, h('div', { style: { color: 'var(--ink-3)', marginBottom: '6px' } }, glyph('camera', 40, 1.4)), '사진을 골라 주세요'));
+  const after = h('div', { class: 'sketch-box' }, h('div', { class: 'center muted' }, h('div', { style: { color: 'var(--ink-3)', marginBottom: '6px' } }, glyph('pencil', 40, 1.4)), '여기에 도안이 나타나요'));
   const title = h('input', { class: 'input', placeholder: '도안 이름', maxlength: 30, value: '사진 도안' });
   const actions = h('div', { class: 'row hidden' });
 
@@ -131,15 +132,15 @@ async function photoTab(root) {
   };
   actions.append(
     h('div', { style: { minWidth: '200px', flex: '1' } }, title),
-    h('button', { class: 'btn', onclick: () => save(false) }, '💾 내 도안에 저장'),
-    h('button', { class: 'btn primary', onclick: () => save(true) }, '🖍️ 저장하고 그리기'),
+    h('button', { class: 'btn', onclick: () => save(false) }, glyph('download', 18), ' 내 도안에 저장'),
+    h('button', { class: 'btn primary', onclick: () => save(true) }, glyph('brush', 18), ' 저장하고 그리기'),
   );
 
   root.append(
     h('div', { class: 'card' },
       h('div', { class: 'row between' },
         h('div', null, h('h2', { style: { margin: 0 } }, '사진을 색칠 도안으로'), h('p', { class: 'small muted', style: { margin: 0 } }, '사진은 서버로 보내지 않고 이 기기 안에서 바로 바꿔요. 배경이 단순하고 밝은 사진일수록 깔끔해요.')),
-        h('button', { class: 'btn primary lg', onclick: () => file.click() }, '📷 사진 고르기 / 찍기'),
+        h('button', { class: 'btn primary lg', onclick: () => file.click() }, glyph('camera', 20), ' 사진 고르기 / 찍기'),
         file,
       ),
       h('div', { class: 'sketch-split mt' }, before, after),
@@ -183,9 +184,9 @@ async function aiTab(root) {
           h('img', { src: svgDataUrl(r.svg), alt: r.title, style: { width: '100%', maxWidth: '720px', margin: '0 auto', background: '#fff', borderRadius: '14px', border: '1px solid var(--line)' } }),
           h('div', { class: 'row mt' },
             h('div', { style: { minWidth: '200px', flex: '1' } }, title),
-            h('button', { class: 'btn', onclick: generate }, '🔄 다시 만들기'),
-            h('button', { class: 'btn', onclick: () => save(false) }, '💾 내 도안에 저장'),
-            h('button', { class: 'btn primary', onclick: () => save(true) }, '🖍️ 저장하고 그리기'),
+            h('button', { class: 'btn', onclick: generate }, '다시 만들기'),
+            h('button', { class: 'btn', onclick: () => save(false) }, glyph('download', 18), ' 내 도안에 저장'),
+            h('button', { class: 'btn primary', onclick: () => save(true) }, glyph('brush', 18), ' 저장하고 그리기'),
           ),
         ),
       );
@@ -207,7 +208,7 @@ async function aiTab(root) {
       toastError(ex);
     }
   };
-  const genBtn = h('button', { class: 'btn primary lg', onclick: generate }, '✨ 도안 만들기');
+  const genBtn = h('button', { class: 'btn primary lg', onclick: generate }, glyph('sparkles', 20), ' 도안 만들기');
   root.append(
     h('div', { class: 'card' },
       h('h2', null, '말로 설명하면 AI가 색칠 도안을 그려요'),
@@ -227,14 +228,14 @@ async function mineTab(root) {
   const render = () => {
     clear(grid);
     if (!list.length) {
-      grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('📁', '저장한 도안이 없어요', '사진이나 AI로 도안을 만들어 저장해 보세요.')));
+      grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('works', '저장한 도안이 없어요', '사진이나 AI로 도안을 만들어 저장해 보세요.')));
       return;
     }
     for (const t of list) {
       grid.append(
         h('div', { class: 'tpl' },
           h('button', { class: 'tpl-img', style: { border: 'none', cursor: 'pointer', padding: 0 }, onclick: () => go(`/draw?template=${encodeURIComponent(t.ref)}`) }, h('img', { src: `/api/templates/${t.id}/image?thumb=1`, alt: t.title, loading: 'lazy' })),
-          h('div', null, t.source === 'ai' ? '✨ ' : t.source === 'photo' ? '📷 ' : '', t.title),
+          h('div', { class: 'row nowrap', style: { gap: '4px', justifyContent: 'center' } }, t.source === 'ai' ? glyph('sparkles', 14) : t.source === 'photo' ? glyph('camera', 14) : null, t.title),
           t.mine
             ? h('button', { class: 'btn sm ghost', onclick: async () => {
                 if (!(await confirmDialog(`'${t.title}' 도안을 지울까요?`, { okLabel: '지우기', danger: true }))) return;
@@ -277,7 +278,7 @@ export function templatePicker({ allowNone = true, current = null } = {}) {
           fill(area, 
             list.length
               ? h('div', { class: 'tpl-grid' }, list.map((t) => h('button', { class: `tpl ${current === t.ref ? 'active' : ''}`, onclick: () => finish(t.ref) }, h('div', { class: 'tpl-img' }, h('img', { src: `/api/templates/${t.id}/image?thumb=1`, alt: t.title })), t.title)))
-              : emptyState('📁', '저장한 도안이 없어요', '"도안 만들기" 메뉴에서 사진이나 AI로 도안을 만들 수 있어요.'),
+              : emptyState('works', '저장한 도안이 없어요', '"도안 만들기" 메뉴에서 사진이나 AI로 도안을 만들 수 있어요.'),
           );
         } catch (ex) {
           toastError(ex);

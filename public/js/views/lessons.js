@@ -5,6 +5,7 @@ import { shell, go } from '../app.js';
 import { lessonCard, lessonArt } from './landing.js';
 import { templatePicker } from './templates.js';
 import { templateThumbSrc } from '../templates.js';
+import { glyph } from '../icons.js';
 
 const PAPERS = [['', '기본'], ['white', '흰 도화지'], ['ivory', '미색 도화지'], ['kraft', '크라프트지'], ['black', '검정 도화지'], ['watercolor', '수채화지'], ['canvas', '캔버스']];
 const TECH = { watercolor: '수채화', oil: '유화' };
@@ -78,7 +79,7 @@ function lessonDetail(l, { onSaved } = {}) {
         h('p', { class: 'muted mt', style: { whiteSpace: 'pre-line' } }, l.description || l.summary || ''),
       ),
       h('div', { class: 'stack' },
-        l.goals?.length ? h('div', null, h('h3', null, '학습 목표'), h('ul', { class: 'list-clean small' }, l.goals.map((g) => h('li', null, h('span', { class: 'li-ico' }, '🎯'), g)))) : null,
+        l.goals?.length ? h('div', null, h('h3', null, '학습 목표'), h('ul', { class: 'list-clean small' }, l.goals.map((g) => h('li', null, h('span', { class: 'li-ico', style: { color: 'var(--primary)' } }, glyph('check', 16, 2.4)), g)))) : null,
         l.steps?.length ? h('div', null, h('h3', null, '활동 순서'), h('ol', { class: 'steps-list small' }, l.steps.map((s) => h('li', null, s)))) : null,
         l.teacherTips?.length ? h('div', { class: 'notice info' }, h('b', null, '선생님 팁'), h('ul', { style: { margin: '6px 0 0', paddingLeft: '18px' } }, l.teacherTips.map((t) => h('li', null, t)))) : null,
       ),
@@ -107,7 +108,7 @@ export async function libraryPage({ query }) {
       .filter((l) => (!f.grade || l.grade === f.grade) && (!f.technique || l.technique === f.technique) && (!f.season || l.season === f.season))
       .filter((l) => !q || [l.title, l.summary, l.description, ...(l.subjects || [])].join(' ').toLowerCase().includes(q))
       .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-    if (!items.length) grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('🔍', '조건에 맞는 수업이 없어요')));
+    if (!items.length) grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('lessons', '조건에 맞는 수업이 없어요')));
     for (const l of items) grid.append(lessonCard(l, () => lessonDetail(l, { onSaved: renderGrid })));
   }
   function render() {
@@ -157,7 +158,7 @@ function lessonEditor(l, onSaved) {
   const addMat = (m = {}) => {
     const t = h('input', { class: 'input', placeholder: '자료 이름', value: m.title || '', style: { flex: '1' } });
     const u = h('input', { class: 'input', placeholder: 'https:// (유튜브·이미지·링크)', value: m.url || '', style: { flex: '2' } });
-    const row = h('div', { class: 'row nowrap mat-row' }, t, u, h('button', { class: 'btn icon sm ghost', 'aria-label': '자료 삭제', onclick: () => row.remove() }, '✕'));
+    const row = h('div', { class: 'row nowrap mat-row' }, t, u, h('button', { class: 'btn icon sm ghost', 'aria-label': '자료 삭제', onclick: () => row.remove() }, glyph('close', 16)));
     row._get = () => ({ title: t.value, url: u.value.trim() });
     matBox.append(row);
   };
@@ -217,7 +218,7 @@ export async function myLessonsPage() {
   function render() {
     clear(grid);
     if (!my.length) {
-      grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('📒', '저장한 수업이 없어요', '라이브러리에서 마음에 드는 수업을 저장하거나 직접 만들어 보세요.', h('a', { class: 'btn primary', href: '#/t/lessons' }, '라이브러리 보기'))));
+      grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('lessons', '저장한 수업이 없어요', '라이브러리에서 마음에 드는 수업을 저장하거나 직접 만들어 보세요.', h('a', { class: 'btn primary', href: '#/t/lessons' }, '라이브러리 보기'))));
       return;
     }
     for (const l of my) {

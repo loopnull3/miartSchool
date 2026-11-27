@@ -36,8 +36,8 @@ if (!klass) {
   run("INSERT INTO classes (teacher_id, name, grade, code) VALUES (?, '3학년 2반', '초등 3학년', ?)", teacherId, 'DEMO23');
   klass = one('SELECT * FROM classes WHERE teacher_id = ? AND name = ?', teacherId, '3학년 2반');
   const kids = [
-    ['김하늘', '🐰', 'dog', 'apple'], ['이바다', '🐳', 'cat', 'banana'], ['박구름', '🐻', 'rabbit', 'grape'], ['최별님', '🦊', 'pig', 'orange'],
-    ['정나래', '🦋', 'elephant', 'peach'], ['한여름', '🐯', 'panda', 'watermelon'], ['오솔길', '🐸', 'dog', 'grape'], ['윤보라', '🦄', 'cat', 'peach'],
+    ['김하늘', 'tone0', 'dog', 'apple'], ['이바다', 'tone1', 'cat', 'banana'], ['박구름', 'tone2', 'rabbit', 'grape'], ['최별님', 'tone3', 'pig', 'orange'],
+    ['정나래', 'tone4', 'elephant', 'peach'], ['한여름', 'tone5', 'panda', 'watermelon'], ['오솔길', 'tone6', 'dog', 'grape'], ['윤보라', 'tone7', 'cat', 'peach'],
   ];
   kids.forEach(([name, avatar, animal, fruit], i) =>
     run(
@@ -87,8 +87,8 @@ if (!klass) {
     });
   }
 
-  run("INSERT INTO boards (teacher_id, class_id, scope, title, description, emoji) VALUES (?, ?, 'class', '3학년 2반 겨울 전시회', '이번 달 우리 반 최고의 작품들', '❄️')", teacherId, klass.id);
-  run("INSERT INTO boards (teacher_id, school_id, scope, title, description, emoji) VALUES (?, ?, 'school', '미아트초 작품 전시관', '우리 학교 모든 반이 함께 쓰는 보드', '🏫')", teacherId, school.id);
+  run("INSERT INTO boards (teacher_id, class_id, scope, title, description, emoji) VALUES (?, ?, 'class', '3학년 2반 겨울 전시회', '이번 달 우리 반 최고의 작품들', 'snow')", teacherId, klass.id);
+  run("INSERT INTO boards (teacher_id, school_id, scope, title, description, emoji) VALUES (?, ?, 'school', '미아트초 작품 전시관', '우리 학교 모든 반이 함께 쓰는 보드', 'school')", teacherId, school.id);
   if (!one('SELECT id FROM testimonials')) {
     run("INSERT INTO testimonials (quote, name, role, sort) VALUES ('예시 후기입니다. 관리자 화면에서 실제 선생님 후기로 바꿔 주세요.', '예시 후기 1', '관리자 › 이용 후기', 1)");
     run("INSERT INTO testimonials (quote, name, role, sort) VALUES ('실제로 받은 후기만, 작성자 동의를 받아 올려 주세요.', '예시 후기 2', '관리자 › 이용 후기', 2)");
@@ -101,7 +101,7 @@ console.log(`
 관리자   admin@miart.school / admin1234
 선생님   teacher@miart.school / teacher1234
 학교 인증 코드  ${school.invite_code}  (이 코드로 가입한 선생님은 바로 승인)
-학생 로그인 (학생 로그인 › 참여 코드)
-  김하늘 MIA101 🐶🍎   이바다 MIA102 🐱🍌   박구름 MIA103 🐰🍇   최별님 MIA104 🐷🍊
-  정나래 MIA105 🐘🍑   한여름 MIA106 🐼🍉   오솔길 MIA107 🐶🍇   윤보라 MIA108 🐱🍑
+학생 로그인 (학생 로그인 › 참여 코드 → 동물 → 과일)
+  김하늘 MIA101 강아지·사과   이바다 MIA102 고양이·바나나   박구름 MIA103 토끼·포도   최별님 MIA104 돼지·오렌지
+  정나래 MIA105 코끼리·복숭아 한여름 MIA106 판다·수박     오솔길 MIA107 강아지·포도   윤보라 MIA108 고양이·복숭아
 `);

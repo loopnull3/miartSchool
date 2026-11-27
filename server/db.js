@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS students (
   name TEXT NOT NULL,
   number INTEGER,
   pin TEXT NOT NULL,
-  avatar TEXT NOT NULL DEFAULT '🐣',
+  avatar TEXT NOT NULL DEFAULT 'tone0',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS boards (
   scope TEXT NOT NULL DEFAULT 'class' CHECK (scope IN ('class','school')),
   title TEXT NOT NULL,
   description TEXT,
-  emoji TEXT NOT NULL DEFAULT '🖼️',
+  emoji TEXT NOT NULL DEFAULT 'frame',
   student_posts INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -261,6 +261,8 @@ function migrate(d) {
   addColumn(d, 'assignments', 'materials_json', 'TEXT');
   addColumn(d, 'assignments', 'lesson_id', 'TEXT');
   addColumn(d, 'artworks', 'technique', "TEXT NOT NULL DEFAULT 'watercolor'");
+  // 예전 이모지 아바타 → 색상 키 (아이콘은 이름 첫 글자 아바타로 그림)
+  d.exec("UPDATE students SET avatar = 'tone' || (id % 8) WHERE avatar NOT LIKE 'tone%'");
 }
 
 export function getDb() {

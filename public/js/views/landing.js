@@ -5,6 +5,7 @@ import { go, homeFor, onLeave } from '../app.js';
 import { SITE } from '/shared/site-config.js';
 import { BUILTIN_TEMPLATES, svgDataUrl } from '../templates.js';
 import { animateColoring } from '../autocolor.js';
+import { appIcon, glyph } from '../icons.js';
 
 const won = (n) => `₩${Number(n).toLocaleString('ko-KR')}`;
 
@@ -55,7 +56,7 @@ function lessonArt(l) {
   const t = l.template && BUILTIN_TEMPLATES.find((x) => x.id === l.template);
   const cover = l.cover || {};
   return h('div', { class: 'lesson-art', style: { background: `linear-gradient(135deg, ${cover.from || '#eef4ff'}, ${cover.to || '#fdeaf3'})` } },
-    t ? h('img', { src: svgDataUrl(t.svg), alt: '', loading: 'lazy' }) : h('span', { class: 'lesson-emoji' }, cover.emoji || '🎨'),
+    t ? h('img', { src: svgDataUrl(t.svg), alt: '', loading: 'lazy' }) : h('span', { class: 'lesson-emoji' }, appIcon(l.technique === 'oil' ? 'draw' : 'open', 84)),
     h('span', { class: 'badge' }, l.technique === 'oil' ? '유화' : '수채화'),
   );
 }
@@ -283,8 +284,8 @@ export async function landingPage({ me }) {
           h('div', { class: 'try-card' }, h('h4', null, '유화'), oilCanvas, h('a', { class: 'btn primary block mt', href: '#/try/oil' }, '체험하기')),
         ),
         h('div', { class: 'try-guide' },
-          h('div', null, h('span', { class: 'ck' }, '✓'), '원하는 화풍의 ', h('b', null, '체험하기'), ' 버튼을 눌러 보세요.'),
-          h('div', null, h('span', { class: 'ck' }, '✓'), '회원가입이나 설치 없이 ', h('b', { style: { color: 'var(--primary)' } }, '바로 그릴 수 있어요.')),
+          h('div', null, h('span', { class: 'ck' }, glyph('check', 12, 3)), '원하는 화풍의 ', h('b', null, '체험하기'), ' 버튼을 눌러 보세요.'),
+          h('div', null, h('span', { class: 'ck' }, glyph('check', 12, 3)), '회원가입이나 설치 없이 ', h('b', { style: { color: 'var(--primary)' } }, '바로 그릴 수 있어요.')),
         ),
       ),
       h('div', { class: 'feature-panel mint' },

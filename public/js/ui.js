@@ -1,3 +1,4 @@
+import { appIcon, glyph } from './icons.js';
 // DOM 헬퍼 · 토스트 · 모달
 export function h(tag, props, ...children) {
   const el = document.createElement(tag);
@@ -77,7 +78,7 @@ export function modal({ title, body, wide = false, actions = [], onClose } = {})
   const box = h(
     'div',
     { class: `modal ${wide ? 'wide' : ''}`, role: 'dialog', 'aria-modal': 'true' },
-    h('div', { class: 'modal-head' }, h('h2', null, title || ''), h('button', { class: 'modal-close', type: 'button', 'aria-label': '닫기', onclick: close }, '✕')),
+    h('div', { class: 'modal-head' }, h('h2', null, title || ''), h('button', { class: 'modal-close', type: 'button', 'aria-label': '닫기', onclick: close }, glyph('close', 16, 2.2))),
     body,
     actionEls.length ? h('div', { class: 'row end mt' }, actionEls) : null,
   );
@@ -130,8 +131,8 @@ export function loading() {
   return h('div', { class: 'loading' }, h('div', { class: 'spinner' }));
 }
 
-export function emptyState(emoji, title, sub, action) {
-  return h('div', { class: 'empty' }, h('div', { class: 'empty-emoji' }, emoji), h('h3', null, title), sub ? h('p', { class: 'muted' }, sub) : null, action || null);
+export function emptyState(iconName, title, sub, action) {
+  return h('div', { class: 'empty' }, h('div', { class: 'empty-emoji' }, appIcon(iconName || 'works', 60)), h('h3', null, title), sub ? h('p', { class: 'muted' }, sub) : null, action || null);
 }
 
 export function fmtDate(s) {

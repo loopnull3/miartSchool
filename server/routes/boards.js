@@ -5,7 +5,7 @@ import { HttpError, requireTeacher } from '../auth.js';
 import { saveDataUrlImage, removeImage, sendImage } from '../storage.js';
 
 const r = Router();
-const EMOJIS = ['🖼️', '🎨', '🌈', '⭐', '🌸', '❄️', '🎄', '🐾', '🚀', '📚', '🏆', '💡'];
+const EMOJIS = ['frame', 'palette', 'rainbow', 'star', 'flower', 'snow', 'tree', 'paw', 'rocket', 'book', 'trophy', 'bulb', 'school'];
 
 function requireAny(req) {
   if (!req.auth) throw new HttpError(401, '로그인이 필요합니다.');
@@ -104,7 +104,7 @@ r.post('/boards', (req, res) => {
     scope,
     title,
     String(b.description || '').trim().slice(0, 200) || null,
-    EMOJIS.includes(b.emoji) ? b.emoji : '🖼️',
+    EMOJIS.includes(b.emoji) ? b.emoji : 'frame',
     b.studentPosts === false ? 0 : 1,
   );
   res.json(boardSummary(one('SELECT * FROM boards WHERE id = ?', Number(info.lastInsertRowid)), req.auth));
@@ -142,10 +142,10 @@ r.delete('/boards/:id', (req, res) => {
 function authorOf(p) {
   if (p.author_kind === 'student') {
     const s = one('SELECT name, avatar FROM students WHERE id = ?', p.author_id);
-    return { name: s?.name ?? '알 수 없음', avatar: s?.avatar ?? '🙂', teacher: false };
+    return { name: s?.name ?? '알 수 없음', id: p.author_id, teacher: false };
   }
   const u = one('SELECT name FROM users WHERE id = ?', p.author_id);
-  return { name: `${u?.name ?? ''} 선생님`, avatar: '🧑‍🏫', teacher: true };
+  return { name: `${u?.name ?? ''} 선생님`, id: `t${p.author_id}`, teacher: true };
 }
 
 function postView(p, auth) {

@@ -2,6 +2,7 @@
 import { api } from '../api.js';
 import { h, clear, fill, toast, toastError } from '../ui.js';
 import { ANIMALS, FRUITS } from '/shared/login-pictures.js';
+import { appIcon, glyph, animalIcon, fruitIcon, avatarEl } from '../icons.js';
 import { go, refreshMe, homeFor, session, shell, onLeave } from '../app.js';
 
 function formError() {
@@ -81,7 +82,7 @@ export function register() {
           } else {
             fill(body, 
               h('div', { class: 'center' },
-                h('div', { style: { fontSize: '56px' } }, '📮'),
+                appIcon('submitted', 64),
                 h('h2', null, '가입 신청이 접수됐어요'),
                 h('p', { class: 'muted' }, '관리자가 승인하면 로그인할 수 있어요. 학교 인증 코드를 받으셨다면 코드를 넣어 다시 가입하면 바로 사용할 수 있어요.'),
                 h('a', { class: 'btn', href: '#/login' }, '로그인 화면으로'),
@@ -150,8 +151,8 @@ export async function studentLogin({ params, query, me }) {
 
   function tabs() {
     return h('div', { class: 'segmented lg', role: 'tablist', style: { margin: '18px 0 6px' } },
-      h('button', { class: tab === 'qr' ? 'on' : '', role: 'tab', 'aria-selected': String(tab === 'qr'), onclick: () => { tab = 'qr'; stepStart(); } }, '◻︎ QR 코드'),
-      h('button', { class: tab === 'code' ? 'on' : '', role: 'tab', 'aria-selected': String(tab === 'code'), onclick: () => { tab = 'code'; stepStart(); } }, '# 참여 코드'),
+      h('button', { class: tab === 'qr' ? 'on' : '', role: 'tab', 'aria-selected': String(tab === 'qr'), onclick: () => { tab = 'qr'; stepStart(); } }, glyph('qr', 16), ' QR 코드'),
+      h('button', { class: tab === 'code' ? 'on' : '', role: 'tab', 'aria-selected': String(tab === 'code'), onclick: () => { tab = 'code'; stepStart(); } }, glyph('hash', 16), ' 참여 코드'),
     );
   }
 
@@ -267,17 +268,17 @@ export async function studentLogin({ params, query, me }) {
               setTimeout(() => stepPicture(code, student, 'animal', {}), 600);
             }
           },
-        }, h('span', { class: 'pic' }, x.emoji), x.label),
+        }, h('span', { class: 'pic' }, kind === 'animal' ? animalIcon(x.key, 76) : fruitIcon(x.key, 76)), x.label),
       ),
     );
     fill(body, 
       dots(kind === 'animal' ? 1 : 2),
-      h('span', { class: 'avatar lg' }, student.avatar),
+      avatarEl({ name: student.name, id: student.id }, 72),
       h('h1', { class: 'mt', style: { marginBottom: '4px' } }, kind === 'animal' ? '어떤 동물인가요?' : '어떤 과일인가요?'),
       h('p', { class: 'muted', style: { margin: 0 } }, `${student.name} 학생 · ${student.className}`, h('br'), '카드에 있는 그림을 골라 주세요.'),
       grid,
       err,
-      h('button', { class: 'btn ghost mt', onclick: () => (kind === 'fruit' ? stepPicture(code, student, 'animal', {}) : stepStart()) }, '← 이전'),
+      h('button', { class: 'btn ghost mt', onclick: () => (kind === 'fruit' ? stepPicture(code, student, 'animal', {}) : stepStart()) }, glyph('left', 16), ' 이전'),
     );
   }
 

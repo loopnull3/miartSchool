@@ -3,9 +3,10 @@ import { api } from '../api.js';
 import { h, clear, fill, modal, toast, fmtDate, icon } from '../ui.js';
 import { shell } from '../app.js';
 import { WEATHERS, EMOTIONS, CAUSES, MAX_EMOTIONS, weatherOf } from '/shared/checkin.js';
+import { weatherIcon, weatherSvg, avatarEl } from '../icons.js';
 
 export function weatherBadge(key) {
-  return weatherOf(key) || { emoji: '❔', label: '모름', level: 0 };
+  return weatherOf(key) || { key: 'cloudy', label: '모름', level: 0 };
 }
 
 // 학생: 오늘의 마음 날씨 고르기
@@ -20,7 +21,7 @@ export function openCheckinSheet(entry, onSaved) {
     fill(wGrid, 
       ...WEATHERS.map((w) =>
         h('button', { class: st.weather === w.key ? 'on' : '', 'aria-pressed': String(st.weather === w.key), onclick: () => { st.weather = w.key; render(); } },
-          h('span', { class: 'w-emoji' }, w.emoji), h('span', { class: 'w-label' }, w.label), h('span', { class: 'w-desc' }, w.desc)),
+          h('span', { class: 'w-emoji' }, weatherIcon(w.key, 44)), h('span', { class: 'w-label' }, w.label), h('span', { class: 'w-desc' }, w.desc)),
       ),
     );
     fill(eChips, 
@@ -67,7 +68,7 @@ export function openCheckinSheet(entry, onSaved) {
             return true;
           }
           const saved = await api.post('/student/checkin', { ...st, note: note.value });
-          toast(`${weatherBadge(saved.weather).emoji} 마음 날씨를 저장했어요`, 'ok');
+          toast(`오늘의 마음 날씨(${weatherBadge(saved.weather).label})를 저장했어요`, 'ok');
           onSaved?.(saved);
         },
       },
@@ -84,7 +85,7 @@ export async function studentCheckinPage() {
     for (const e of ck.recent) {
       const w = weatherBadge(e.weather);
       list.append(
-        h('div', null, h('span', { style: { fontSize: '28px' } }, w.emoji),
+        h('div', null, weatherIcon(e.weather, 36),
           h('div', { class: 'grow' }, h('b', null, w.label), h('div', { class: 'small muted' }, e.emotions.map((k) => EMOTIONS.find((x) => x.key === k)?.label).filter(Boolean).join(' · '))),
           h('span', { class: 'small faint' }, fmtDate(e.day + 'T00:00:00'))),
       );
@@ -141,7 +142,9 @@ function trendChart(points, days, title) {
   };
   for (const w of WEATHERS) {
     el('line', { x1: pad.l, x2: W - pad.r, y1: y(w.level), y2: y(w.level), stroke: '#e5e5ea', 'stroke-width': 1 });
-    el('text', { x: pad.l - 10, y: y(w.level) + 6, 'text-anchor': 'end', 'font-size': 18 }, w.emoji);
+    const img = el('image', { x: pad.l - 34, y: y(w.level) - 13, width: 26, height: 26 });
+    img.setAttribute('href', 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(weatherSvg(w.key, 26)));
+    el('title', {}, w.label);
   }
   for (const d of [1, 5, 10, 15, 20, 25, days]) el('text', { x: x(d), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#86868b' }, `${d}일`);
   const pts = points.filter((p) => p.v != null);
@@ -202,11 +205,11 @@ function checkinTable(rows, byId, streaks) {
       h('thead', null, h('tr', null, h('th', null, '학생'), h('th', null, '마음 날씨'), h('th', null, '기분'), h('th', null, '이유'), h('th', null, '한마디'))),
       h('tbody', null,
         rows.map((e) => {
-          const s = byId.get(e.student_id) || { name: '?', avatar: '🙂' };
+          const s = byId.get(e.student_id) || { name: '?', id: e.student_id };
           const w = weatherBadge(e.weather);
           return h('tr', null,
-            h('td', null, h('div', { class: 'row nowrap', style: { gap: '8px' } }, h('span', { class: 'avatar sm' }, s.avatar), h('b', null, s.name), streaks[e.student_id] ? h('span', { class: 'badge danger' }, `${streaks[e.student_id]}일째 비·천둥`) : null)),
-            h('td', null, `${w.emoji} ${w.label}`),
+            h('td', null, h('div', { class: 'row nowrap', style: { gap: '8px' } }, avatarEl(s, 30), h('b', null, s.name), streaks[e.student_id] ? h('span', { class: 'badge danger' }, `${streaks[e.student_id]}일째 비·천둥`) : null)),
+            h('td', null, h('span', { class: 'row nowrap', style: { gap: '6px' } }, weatherIcon(e.weather, 26), w.label)),
             h('td', null, h('div', { class: 'chips', style: { gap: '4px' } }, e.emotions.map((k) => h('span', { class: `badge ${EMOTIONS.find((x) => x.key === k)?.positive ? 'ok' : 'warn'}` }, EMOTIONS.find((x) => x.key === k)?.label || k)))),
             h('td', { class: 'small' }, e.causes.map((k) => CAUSES.find((x) => x.key === k)?.label).filter(Boolean).join(', ') || '-'),
             h('td', { class: 'small' }, e.note || ''),
@@ -246,7 +249,7 @@ export async function checkinTab(root, data) {
 
     const studentSel = h('select', { class: 'input', style: { width: 'auto' }, onchange: (e) => { who = e.target.value; render(r); } },
       h('option', { value: '' }, '우리 반 전체'),
-      r.students.map((s) => h('option', { value: s.id, selected: String(s.id) === who }, `${s.avatar} ${s.name}`)),
+      r.students.map((s) => h('option', { value: s.id, selected: String(s.id) === who }, s.name)),
     );
 
     // 달력
@@ -267,7 +270,7 @@ export async function checkinTab(root, data) {
           onclick: () => list.length && dayDetail(key, list, r.students),
         },
           h('span', { class: 'd' }, d),
-          top ? h('span', { class: 'w' }, weatherBadge(top).emoji) : null,
+          top ? h('span', { class: 'w' }, weatherIcon(top, 30)) : null,
           !who && list.length ? h('span', { class: 'cnt' }, `${list.length}명`) : null,
         ),
       );
@@ -281,7 +284,7 @@ export async function checkinTab(root, data) {
       if (!list.length) continue;
       const v = list.reduce((s0, e) => s0 + weatherBadge(e.weather).level, 0) / list.length;
       const wl = WEATHERS.reduce((best, w) => (Math.abs(w.level - v) < Math.abs(best.level - v) ? w : best), WEATHERS[0]);
-      points.push({ d, v, label: who ? `${d}일 · ${weatherBadge(list[0].weather).emoji} ${weatherBadge(list[0].weather).label}` : `${d}일 · 평균 ${wl.emoji} ${wl.label} (${list.length}명)` });
+      points.push({ d, v, label: who ? `${d}일 · ${weatherBadge(list[0].weather).label}` : `${d}일 · 평균 ${wl.label} (${list.length}명)` });
     }
 
     // 날씨별 개수 (숫자 타일)
@@ -301,7 +304,7 @@ export async function checkinTab(root, data) {
       h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' } },
         h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, '오늘 체크인'), h('span', { class: 'stat-val' }, `${todayRows.length}/${r.students.length}`)),
         h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, '이번 달 참여율'), h('span', { class: 'stat-val' }, `${Math.min(100, rate)}%`)),
-        h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, who ? '자주 고른 날씨' : '가장 많은 날씨'), h('span', { class: 'stat-val' }, common ? `${weatherBadge(common).emoji} ${weatherBadge(common).label}` : '-')),
+        h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, who ? '자주 고른 날씨' : '가장 많은 날씨'), h('span', { class: 'stat-val row nowrap', style: { gap: '8px' } }, common ? [weatherIcon(common, 36), weatherBadge(common).label] : '-')),
         h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, '관심이 필요한 친구'), h('span', { class: 'stat-val' }, `${streakIds.length}명`), h('span', { class: 'tiny faint' }, '최근 2일 이상 비·천둥')),
       ),
       h('div', { class: 'grid two mt' },
@@ -310,7 +313,7 @@ export async function checkinTab(root, data) {
           h('h3', null, who ? `${byId.get(Number(who))?.name}의 마음 변화` : '우리 반 평균 마음 변화'),
           trendChart(points, days, '날짜별 마음 날씨'),
           h('div', { class: 'grid mt', style: { gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px' } },
-            WEATHERS.map((w) => h('div', { class: 'center', title: `${w.label} ${counts[w.key]}회` }, h('div', { style: { fontSize: '22px' } }, w.emoji), h('div', { class: 'tiny muted' }, w.label), h('b', { class: 'num' }, counts[w.key]))),
+            WEATHERS.map((w) => h('div', { class: 'center', title: `${w.label} ${counts[w.key]}회` }, weatherIcon(w.key, 32), h('div', { class: 'tiny muted' }, w.label), h('b', { class: 'num' }, counts[w.key]))),
           ),
         ),
       ),

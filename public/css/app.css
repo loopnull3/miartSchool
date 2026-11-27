@@ -323,7 +323,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 .toast { background: rgba(29, 29, 31, 0.9); color: #fff; padding: 11px 20px; border-radius: 999px; font-weight: 500; font-size: 0.92rem; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2); animation: drop 0.3s var(--ease); max-width: 90vw; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .toast.error { background: rgba(215, 0, 21, 0.92); }
 .toast.ok { background: rgba(29, 29, 31, 0.9); }
-.toast.ok::before { content: '✓  '; color: var(--green); font-weight: 800; }
+.toast.ok::before { content: ''; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; background: var(--green); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat; }
 @keyframes drop { from { transform: translateY(-10px); opacity: 0; } }
 
 /* ---------- 공통 조각 ---------- */
@@ -540,7 +540,7 @@ input[type='range'] { accent-color: var(--primary); width: 100%; }
 .tier .t-price small { font-size: 0.78rem; color: var(--ink-3); font-weight: 500; letter-spacing: 0; }
 .tier .t-orig { color: var(--ink-3); text-decoration: line-through; font-size: 0.8rem; }
 .plan ul { list-style: none; padding: 18px 0 0; margin: 18px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem; color: var(--ink-2); }
-.plan ul li::before { content: '✓'; color: var(--primary); font-weight: 800; margin-right: 8px; }
+.plan ul li::before { content: ''; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; background: var(--primary); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat; }
 .l-cta { background: #1d1d1f; color: #fff; text-align: center; padding: 100px 22px; }
 .l-cta h2 { color: #fff; font-size: clamp(2rem, 4.4vw, 3rem); letter-spacing: -0.035em; }
 .l-cta p { color: #a1a1a6; font-size: 1.15rem; }
@@ -601,7 +601,7 @@ input[type='range'] { accent-color: var(--primary); width: 100%; }
   color: var(--ink-2); font-size: 0.8rem; font-weight: 600; letter-spacing: -0.01em; text-decoration: none !important;
   transition: background 0.2s var(--ease), color 0.2s, transform 0.15s var(--ease);
 }
-.rail-item .ri { font-size: 32px; line-height: 1; filter: saturate(1.05); transition: transform 0.2s var(--ease); }
+.rail-item .ri { line-height: 0; transition: transform 0.2s var(--ease); }
 .rail-item:hover { background: rgba(0, 0, 0, 0.04); color: var(--ink); }
 .rail-item:hover .ri { transform: translateY(-1px) scale(1.04); }
 .rail-item:active { transform: scale(0.96); }
@@ -679,7 +679,7 @@ input[type='range'] { accent-color: var(--primary); width: 100%; }
   }
   .rail-logo { display: none; }
   .rail-item { width: auto; flex: 1; padding: 6px 2px 4px; border-radius: 12px; font-size: 0.66rem; gap: 2px; }
-  .rail-item .ri { font-size: 24px; }
+  .rail-item .ri svg { width: 30px; height: 30px; }
   .rail-item.active { background: transparent; box-shadow: none; }
   .rail-bottom { margin: 0; padding: 0 4px; display: flex; align-items: center; }
   .rail-avatar { width: 38px; height: 38px; font-size: 20px; }
@@ -694,3 +694,15 @@ input[type='range'] { accent-color: var(--primary); width: 100%; }
   .main-panel { margin: 0; box-shadow: none; border-radius: 0; }
   .main-panel > .page { padding: 0; }
 }
+
+/* ===== 미아트스쿨 아이콘 ===== */
+.mi-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; flex: none; }
+.mi-icon svg { display: block; }
+.mi-app svg { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12)); }
+.mi-avatar { display: inline-grid; place-items: center; border-radius: 50%; color: #fff; font-weight: 700; letter-spacing: -0.02em; flex: none; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.12); }
+.btn .mi-glyph, .chip .mi-glyph { margin: 0 -2px; }
+.pic-chip { border: none; background: var(--surface-2); border-radius: 14px; padding: 4px; cursor: pointer; line-height: 0; }
+.pic-chip.on { background: var(--primary-50); box-shadow: inset 0 0 0 2px var(--primary); }
+.weather-pick .w-emoji { display: grid; place-items: center; height: 46px; }
+.cal .day .w { line-height: 0; }
+.login-print .lp-pics { display: flex; gap: 4px; }

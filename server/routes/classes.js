@@ -5,7 +5,8 @@ import { HttpError, requireTeacher, requireOwnedClass, randomCode, randomPin, ne
 import { ANIMALS, FRUITS } from '../../shared/login-pictures.js';
 
 const r = Router();
-const AVATARS = ['🐣', '🐰', '🐻', '🐼', '🦊', '🐯', '🐨', '🐸', '🐵', '🦁', '🐶', '🐱', '🐹', '🐧', '🦄', '🐙', '🐳', '🦖', '🐝', '🦋'];
+// 아바타 색상 키 (화면에서는 이름 첫 글자 + 이 색으로 그린다)
+const AVATARS = ['tone0', 'tone1', 'tone2', 'tone3', 'tone4', 'tone5', 'tone6', 'tone7'];
 
 function newStudentLogin() {
   return {

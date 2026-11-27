@@ -4,12 +4,20 @@ import { h, clear, fill, modal, toast, toastError, confirmDialog, emptyState, fm
 import { shell, session, go } from '../app.js';
 import { fileToImage } from '../photo-sketch.js';
 import { canvasThumb } from '../templates.js';
+import { glyph, avatarEl, boardIcon, BOARD_ICONS } from '../icons.js';
 
-const EMOJIS = ['🖼️', '🎨', '🌈', '⭐', '🌸', '❄️', '🎄', '🐾', '🚀', '📚', '🏆', '💡'];
+const EMOJIS = BOARD_ICONS;
+
+function heartEl(on) {
+  const span = document.createElement('span');
+  span.className = 'mi-icon';
+  span.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 19.2s-7.2-4.4-7.2-9.6A3.9 3.9 0 0 1 12 7.4a3.9 3.9 0 0 1 7.2 2.2c0 5.2-7.2 9.6-7.2 9.6z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+  return span;
+}
 
 function cover(b) {
   const n = b.covers.length;
-  if (!n) return h('div', { class: 'board-cover empty' }, b.emoji);
+  if (!n) return h('div', { class: 'board-cover empty', style: { color: 'var(--purple)' } }, boardIcon(b.emoji, 56));
   return h('div', { class: `board-cover n${n}` }, b.covers.map((id) => h('img', { src: `/api/posts/${id}/image?thumb=1`, alt: '', loading: 'lazy' })));
 }
 
@@ -17,7 +25,7 @@ function boardCard(b) {
   return h('a', { class: 'board-card', href: `#/boards/${b.id}` },
     cover(b),
     h('div', { class: 'board-meta' },
-      h('div', { class: 'row between nowrap' }, h('b', { style: { fontSize: '1.05rem' } }, `${b.emoji} ${b.title}`), h('span', { class: `badge ${b.scope === 'school' ? 'primary' : ''}` }, b.scope === 'school' ? '우리 학교' : b.class_name || '우리 반')),
+      h('div', { class: 'row between nowrap' }, h('b', { class: 'row nowrap', style: { fontSize: '1.05rem', gap: '6px' } }, boardIcon(b.emoji, 20), b.title), h('span', { class: `badge ${b.scope === 'school' ? 'primary' : ''}` }, b.scope === 'school' ? '우리 학교' : b.class_name || '우리 반')),
       h('div', { class: 'small muted', style: { marginTop: '4px' } }, b.description || `${b.teacher_name || ''} 선생님의 보드`),
       h('div', { class: 'tiny faint', style: { marginTop: '6px' } }, `작품 ${b.post_count}개`),
     ),
@@ -30,11 +38,11 @@ export async function boardEditor(existing, onSaved) {
   const classes = isNew ? (await api.get('/classes')).filter((c) => !c.archived) : [];
   const title = h('input', { class: 'input', maxlength: 40, value: existing?.title || '', placeholder: '예) 3학년 2반 겨울 전시회' });
   const desc = h('input', { class: 'input', maxlength: 200, value: existing?.description || '', placeholder: '보드 소개 (선택)' });
-  let emoji = existing?.emoji || '🖼️';
+  let emoji = EMOJIS.includes(existing?.emoji) ? existing.emoji : 'frame';
   let scope = 'class';
   let studentPosts = existing ? existing.student_posts : true;
   const emojiRow = h('div', { class: 'chips' });
-  const renderEmoji = () => fill(emojiRow, ...EMOJIS.map((e) => h('button', { class: `chip ${emoji === e ? 'on' : ''}`, style: { fontSize: '1.2rem', padding: '0 12px' }, onclick: () => { emoji = e; renderEmoji(); } }, e)));
+  const renderEmoji = () => fill(emojiRow, ...EMOJIS.map((e) => h('button', { class: `chip ${emoji === e ? 'on' : ''}`, style: { padding: '0 12px' }, 'aria-label': e, onclick: () => { emoji = e; renderEmoji(); } }, boardIcon(e, 20))));
   renderEmoji();
   const classSel = h('select', { class: 'input' }, classes.map((c) => h('option', { value: c.id }, c.name)));
   const classField = h('label', { class: 'field' }, '학급', classSel);
@@ -83,7 +91,7 @@ export async function boardsPage() {
     fill(seg, ...[['all', '전체'], ['class', '우리 반'], ['school', '우리 학교']].map(([k, l]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; render(); } }, l)));
     clear(grid);
     const items = list.filter((b) => filter === 'all' || b.scope === filter);
-    if (!items.length) grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('🖼️', '아직 보드가 없어요', isTeacher ? '보드를 만들면 학생들이 작품을 올리고 서로 감상할 수 있어요.' : '선생님이 보드를 만들면 여기에 나타나요.')));
+    if (!items.length) grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('gallery', '아직 보드가 없어요', isTeacher ? '보드를 만들면 학생들이 작품을 올리고 서로 감상할 수 있어요.' : '선생님이 보드를 만들면 여기에 나타나요.')));
     items.forEach((b) => grid.append(boardCard(b)));
   };
   render();
@@ -137,7 +145,7 @@ async function postSheet(board, onPosted) {
         ...arts.map((a) =>
           h('button', { class: `tpl ${picked?.id === a.id ? 'active' : ''}`, onclick: () => { picked = a; caption.value = a.title; draw(); } },
             h('div', { class: 'tpl-img' }, h('img', { src: `/api/artworks/${a.id}/image?thumb=1`, alt: a.title, loading: 'lazy' })),
-            a.student_name ? `${a.student_avatar} ${a.student_name}` : a.title),
+            a.student_name ? a.student_name : a.title),
         ),
       );
     };
@@ -145,7 +153,7 @@ async function postSheet(board, onPosted) {
     area.append(grid);
   }
   function renderUpload() {
-    const preview = h('div', { class: 'sketch-box', style: { aspectRatio: '16 / 10' } }, h('span', { class: 'muted' }, '📷 사진을 골라 주세요'));
+    const preview = h('div', { class: 'sketch-box', style: { aspectRatio: '16 / 10' } }, h('span', { class: 'muted row nowrap' }, glyph('camera', 20), ' 사진을 골라 주세요'));
     const file = h('input', { type: 'file', accept: 'image/*', class: 'hidden', onchange: async (e) => {
       const f = e.target.files?.[0];
       if (!f) return;
@@ -165,7 +173,7 @@ async function postSheet(board, onPosted) {
   };
   render();
   modal({
-    title: `${board.emoji} ${board.title}에 올리기`,
+    title: `${board.title}에 올리기`,
     wide: true,
     body: h('div', { class: 'stack' }, seg, area, caption, text),
     actions: [
@@ -189,7 +197,7 @@ async function postSheet(board, onPosted) {
             Object.assign(payload, upload);
           }
           await api.post(`/boards/${board.id}/posts`, payload);
-          toast('보드에 올렸어요 🎉', 'ok');
+          toast('보드에 올렸어요', 'ok');
           onPosted?.();
         },
       },
@@ -212,26 +220,26 @@ export async function boardPage({ params }) {
         Object.assign(p, u);
         likeBtn.className = `like ${p.liked ? 'on' : ''}`;
         likeBtn.lastChild.textContent = String(p.likes);
-        likeBtn.firstChild.textContent = p.liked ? '♥' : '♡';
+        likeBtn.firstChild.replaceWith(heartEl(p.liked));
       } catch (ex) {
         toastError(ex);
       }
-    } }, h('span', null, p.liked ? '♥' : '♡'), h('span', null, String(p.likes)));
+    } }, heartEl(p.liked), h('span', null, String(p.likes)));
     const canDelete = p.mine || data.board.can_manage;
     return h('div', { class: 'post' },
-      h('img', { src: `/api/posts/${p.id}/image?thumb=1`, alt: p.title || '작품', loading: 'lazy', onclick: () => modal({ title: p.title || '작품', wide: true, body: h('div', null, h('img', { src: `/api/posts/${p.id}/image`, alt: '', style: { width: '100%', borderRadius: '14px', background: '#fff' } }), p.body ? h('p', { class: 'muted mt' }, p.body) : null, h('p', { class: 'small faint' }, `${p.author.avatar} ${p.author.name} · ${fmtDate(p.created_at)}`)) }) }),
+      h('img', { src: `/api/posts/${p.id}/image?thumb=1`, alt: p.title || '작품', loading: 'lazy', onclick: () => modal({ title: p.title || '작품', wide: true, body: h('div', null, h('img', { src: `/api/posts/${p.id}/image`, alt: '', style: { width: '100%', borderRadius: '14px', background: '#fff' } }), p.body ? h('p', { class: 'muted mt' }, p.body) : null, h('p', { class: 'small faint' }, `${p.author.name} · ${fmtDate(p.created_at)}`)) }) }),
       h('div', { class: 'post-body' },
         p.title ? h('div', { class: 'post-title' }, p.title) : null,
         p.body ? h('div', { class: 'post-text' }, p.body) : null,
         h('div', { class: 'post-foot' },
-          h('span', null, `${p.author.avatar} ${p.author.name}`),
+          h('span', { class: 'row nowrap', style: { gap: '6px' } }, avatarEl(p.author, 22), p.author.name),
           h('div', { class: 'row nowrap', style: { gap: '2px' } },
             likeBtn,
             canDelete ? h('button', { class: 'like', 'aria-label': '게시물 삭제', title: '삭제', onclick: async () => {
               if (!(await confirmDialog('이 게시물을 지울까요?', { okLabel: '지우기', danger: true }))) return;
               await api.del(`/posts/${p.id}`);
               reload();
-            } }, '🗑') : null,
+            } }, glyph('trash', 16)) : null,
           ),
         ),
       ),
@@ -243,7 +251,7 @@ export async function boardPage({ params }) {
       h('a', { href: '#/boards', class: 'small' }, '‹ 갤러리보드'),
       h('div', { class: 'page-head', style: { marginTop: '6px' } },
         h('div', null,
-          h('h1', null, `${b.emoji} ${b.title}`),
+          h('h1', { class: 'row nowrap', style: { gap: '12px' } }, h('span', { style: { color: 'var(--purple)' } }, boardIcon(b.emoji, 34)), b.title),
           h('p', { class: 'sub' }, b.description || '', ' ', h('span', { class: `badge ${b.scope === 'school' ? 'primary' : ''}` }, b.scope === 'school' ? '우리 학교' : b.class_name || '우리 반'), b.student_posts ? null : h('span', { class: 'badge', style: { marginLeft: '6px' } }, '선생님만 올리기')),
         ),
         h('div', { class: 'row' },
@@ -260,7 +268,7 @@ export async function boardPage({ params }) {
     clear(wall);
     for (const p of data.posts) wall.append(postEl(p));
     clear(emptyBox);
-    if (!data.posts.length) emptyBox.append(emptyState('🎨', '아직 올라온 작품이 없어요', data.can_post ? '첫 작품을 올려 보세요!' : '곧 멋진 작품이 올라올 거예요.'));
+    if (!data.posts.length) emptyBox.append(emptyState('gallery', '아직 올라온 작품이 없어요', data.can_post ? '첫 작품을 올려 보세요!' : '곧 멋진 작품이 올라올 거예요.'));
   }
   const emptyBox = h('div');
   render();

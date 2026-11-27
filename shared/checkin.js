@@ -1,12 +1,12 @@
 // 마음 날씨 체크인 정의. 서버와 브라우저가 함께 사용한다.
 // level: 그래프 높이 (6 = 가장 맑음)
 export const WEATHERS = [
-  { key: 'sunny', label: '맑음', emoji: '☀️', desc: '기분 최고예요', level: 6, color: '#ff9f0a' },
-  { key: 'partly', label: '구름 조금', emoji: '🌤️', desc: '괜찮아요', level: 5, color: '#ffcc00' },
-  { key: 'cloudy', label: '흐림', emoji: '☁️', desc: '그저 그래요', level: 4, color: '#98989d' },
-  { key: 'fog', label: '안개', emoji: '🌫️', desc: '마음이 뿌예요', level: 3, color: '#8e8e93' },
-  { key: 'rain', label: '비', emoji: '🌧️', desc: '슬퍼요', level: 2, color: '#0a84ff' },
-  { key: 'storm', label: '천둥 번개', emoji: '⛈️', desc: '화가 나요', level: 1, color: '#5e5ce6' },
+  { key: 'sunny', label: '맑음', desc: '기분 최고예요', level: 6, color: '#ff9f0a' },
+  { key: 'partly', label: '구름 조금', desc: '괜찮아요', level: 5, color: '#ffcc00' },
+  { key: 'cloudy', label: '흐림', desc: '그저 그래요', level: 4, color: '#98989d' },
+  { key: 'fog', label: '안개', desc: '마음이 뿌예요', level: 3, color: '#8e8e93' },
+  { key: 'rain', label: '비', desc: '슬퍼요', level: 2, color: '#0a84ff' },
+  { key: 'storm', label: '천둥 번개', desc: '화가 나요', level: 1, color: '#5e5ce6' },
 ];
 
 export const EMOTIONS = [

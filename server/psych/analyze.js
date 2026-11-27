@@ -66,34 +66,34 @@ function observationsFor(kind, f) {
   const { noun, obj } = NOUN[kind];
   const out = [];
   if (f.empty) {
-    out.push({ icon: '📄', text: `${obj} 거의 그리지 않았어요. 피곤했거나 그리기 어려웠을 수 있어요. 다음에 편안할 때 다시 기회를 주세요.` });
+    out.push({ icon: 'image', text: `${obj} 거의 그리지 않았어요. 피곤했거나 그리기 어려웠을 수 있어요. 다음에 편안할 때 다시 기회를 주세요.` });
     return out;
   }
-  if (f.size === 'tiny') out.push({ icon: '🔍', text: `${obj} 아주 작게 그렸어요. 낯선 활동이라 조심스러운 마음이 들었을 수 있어요.` });
-  else if (f.size === 'small') out.push({ icon: '🔍', text: `${obj} 조금 작게 그렸어요. 차분하고 신중한 모습일 수 있어요.` });
-  else if (f.size === 'big') out.push({ icon: '🖼️', text: `${obj} 화면 가득 크게 그렸어요. 표현하고 싶은 에너지가 커요.` });
-  else out.push({ icon: '✅', text: `${noun}의 크기가 화면에 알맞아요. 안정감 있게 자리 잡았어요.` });
+  if (f.size === 'tiny') out.push({ icon: 'search', text: `${obj} 아주 작게 그렸어요. 낯선 활동이라 조심스러운 마음이 들었을 수 있어요.` });
+  else if (f.size === 'small') out.push({ icon: 'search', text: `${obj} 조금 작게 그렸어요. 차분하고 신중한 모습일 수 있어요.` });
+  else if (f.size === 'big') out.push({ icon: 'frame', text: `${obj} 화면 가득 크게 그렸어요. 표현하고 싶은 에너지가 커요.` });
+  else out.push({ icon: 'check', text: `${noun}의 크기가 화면에 알맞아요. 안정감 있게 자리 잡았어요.` });
 
-  if (f.vpos === 'top') out.push({ icon: '☁️', text: '그림이 위쪽에 자리 잡았어요. 상상과 꿈을 많이 품고 있는 모습일 수 있어요.' });
-  else if (f.vpos === 'bottom') out.push({ icon: '⛰️', text: '그림이 아래쪽에 자리 잡았어요. 차분하고 현실적인 마음, 또는 기대고 싶은 마음일 수 있어요.' });
-  if (f.hpos === 'left') out.push({ icon: '⬅️', text: '그림이 왼쪽으로 치우쳤어요. 지나간 일이나 익숙한 것을 떠올리는 중일 수 있어요.' });
-  else if (f.hpos === 'right') out.push({ icon: '➡️', text: '그림이 오른쪽으로 치우쳤어요. 새로운 일과 앞으로의 일에 관심이 많을 수 있어요.' });
+  if (f.vpos === 'top') out.push({ icon: 'sunCloud', text: '그림이 위쪽에 자리 잡았어요. 상상과 꿈을 많이 품고 있는 모습일 수 있어요.' });
+  else if (f.vpos === 'bottom') out.push({ icon: 'tree', text: '그림이 아래쪽에 자리 잡았어요. 차분하고 현실적인 마음, 또는 기대고 싶은 마음일 수 있어요.' });
+  if (f.hpos === 'left') out.push({ icon: 'left', text: '그림이 왼쪽으로 치우쳤어요. 지나간 일이나 익숙한 것을 떠올리는 중일 수 있어요.' });
+  else if (f.hpos === 'right') out.push({ icon: 'right', text: '그림이 오른쪽으로 치우쳤어요. 새로운 일과 앞으로의 일에 관심이 많을 수 있어요.' });
 
-  if (f.pen === 'strong') out.push({ icon: '✊', text: '선을 힘 있게 꾹꾹 그렸어요. 에너지가 넘치거나 마음에 힘이 들어가 있을 수 있어요.' });
-  else if (f.pen === 'light') out.push({ icon: '🪶', text: '선을 가볍고 섬세하게 그렸어요. 조심스럽고 세심한 성향일 수 있어요.' });
+  if (f.pen === 'strong') out.push({ icon: 'bulb', text: '선을 힘 있게 꾹꾹 그렸어요. 에너지가 넘치거나 마음에 힘이 들어가 있을 수 있어요.' });
+  else if (f.pen === 'light') out.push({ icon: 'pencil', text: '선을 가볍고 섬세하게 그렸어요. 조심스럽고 세심한 성향일 수 있어요.' });
 
-  if (f.eraseHeavy) out.push({ icon: '🧽', text: '여러 번 지우고 다시 그렸어요. 잘 그리고 싶은 마음이 커요. "고쳐 그린 부분도 멋지다"고 말해 주세요.' });
+  if (f.eraseHeavy) out.push({ icon: 'pencil', text: '여러 번 지우고 다시 그렸어요. 잘 그리고 싶은 마음이 커요. "고쳐 그린 부분도 멋지다"고 말해 주세요.' });
 
-  if (f.detail === 'rich') out.push({ icon: '🔎', text: '아주 꼼꼼하게 세부까지 그렸어요. 관찰력과 집중력이 돋보여요.' });
-  else if (f.detail === 'simple') out.push({ icon: '✏️', text: '간단한 선으로 핵심만 그렸어요.' });
+  if (f.detail === 'rich') out.push({ icon: 'search', text: '아주 꼼꼼하게 세부까지 그렸어요. 관찰력과 집중력이 돋보여요.' });
+  else if (f.detail === 'simple') out.push({ icon: 'pencil', text: '간단한 선으로 핵심만 그렸어요.' });
 
-  if (f.pace === 'long') out.push({ icon: '⏳', text: '오랜 시간 공들여 그렸어요. 끈기 있게 몰입했어요.' });
-  else if (f.pace === 'quick') out.push({ icon: '⚡', text: '빠르게 완성했어요.' });
+  if (f.pace === 'long') out.push({ icon: 'clock', text: '오랜 시간 공들여 그렸어요. 끈기 있게 몰입했어요.' });
+  else if (f.pace === 'quick') out.push({ icon: 'sparkles', text: '빠르게 완성했어요.' });
 
-  if (f.darkDominant) out.push({ icon: '🖤', text: '여러 색 중에서 어두운 색을 주로 골랐어요. 오늘 기분이 어땠는지 가볍게 물어봐 주세요.' });
-  else if (f.pencilOnly) out.push({ icon: '✏️', text: '연필 한 가지 색으로 그렸어요. 색보다 모양에 집중한 그림이에요.' });
-  else if (f.colorful) out.push({ icon: '🌈', text: `${f.colors}가지 색을 다양하게 썼어요. 감정 표현이 풍부해요.` });
-  else if (f.warmDominant) out.push({ icon: '🧡', text: '따뜻한 색을 많이 썼어요. 밝고 따뜻한 느낌이 전해져요.' });
+  if (f.darkDominant) out.push({ icon: 'heart', text: '여러 색 중에서 어두운 색을 주로 골랐어요. 오늘 기분이 어땠는지 가볍게 물어봐 주세요.' });
+  else if (f.pencilOnly) out.push({ icon: 'pencil', text: '연필 한 가지 색으로 그렸어요. 색보다 모양에 집중한 그림이에요.' });
+  else if (f.colorful) out.push({ icon: 'rainbow', text: `${f.colors}가지 색을 다양하게 썼어요. 감정 표현이 풍부해요.` });
+  else if (f.warmDominant) out.push({ icon: 'heart', text: '따뜻한 색을 많이 썼어요. 밝고 따뜻한 느낌이 전해져요.' });
   return out;
 }
 
@@ -296,13 +296,13 @@ export function analyzePsych(answers = {}, drawingStats = {}) {
   for (const k of DRAWING_STEPS) {
     const f = feats[k];
     if (f.colorful) {
-      kidPoints.push('여러 가지 색을 멋지게 썼어요! 🌈');
+      kidPoints.push('여러 가지 색을 멋지게 썼어요!');
       break;
     }
   }
   for (const k of DRAWING_STEPS) {
     if (feats[k].pace === 'long' || feats[k].detail === 'rich') {
-      kidPoints.push('끝까지 꼼꼼하게 정성을 다했어요! ⭐');
+      kidPoints.push('끝까지 꼼꼼하게 정성을 다했어요!');
       break;
     }
   }

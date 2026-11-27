@@ -1,6 +1,7 @@
 // 미아트스쿨 앱 셸 · 해시 라우터
 import { api } from './api.js';
 import { h, clear, loading, toastError } from './ui.js';
+import { appIcon, avatarEl } from './icons.js';
 import * as pub from './views/public.js';
 import * as landing from './views/landing.js';
 import * as teacher from './views/teacher.js';
@@ -142,7 +143,7 @@ async function render() {
     }
     clear(app).append(
       h('div', { class: 'page narrow' },
-        h('div', { class: 'card center mt-lg' }, h('div', { style: { fontSize: '48px' } }, '😵'), h('h2', null, '문제가 생겼어요'), h('p', { class: 'muted' }, err.message), h('a', { class: 'btn', href: `#${homeFor(me)}` }, '처음으로')),
+        h('div', { class: 'card center mt-lg' }, appIcon('admin', 56), h('h2', null, '문제가 생겼어요'), h('p', { class: 'muted' }, err.message), h('a', { class: 'btn', href: `#${homeFor(me)}` }, '처음으로')),
       ),
     );
     toastError(err);
@@ -184,7 +185,7 @@ function profileMenu(anchor) {
           h('a', { href: '#/try/watercolor', onclick: close }, '드로잉 체험'),
         ]
       : [
-          h('div', { class: 'pp-head' }, h('span', { class: 'avatar' }, me.student.avatar), h('b', null, me.student.name), h('span', null, me.klass.name)),
+          h('div', { class: 'pp-head' }, avatarEl(me.student, 36), h('b', null, me.student.name), h('span', null, me.klass.name)),
           me.klass.checkin_enabled ? h('a', { href: '#/s/checkin', onclick: close }, '내 마음 날씨') : null,
         ];
   const pop = h('div', { class: 'profile-pop', role: 'menu' }, items, h('button', { class: 'pp-logout', onclick: () => { close(); logout(); } }, me.kind === 'user' ? '로그아웃' : '나가기'));
@@ -211,21 +212,21 @@ export function shell(content, { active = '', wide = 'page' } = {}) {
     return h('div', null, bar, h('main', { class: wide }, content));
   }
   const items = [];
-  const item = (href, emoji, label, key) => items.push(h('a', { class: `rail-item ${active === key ? 'active' : ''}`, href: `#${href}`, 'aria-current': active === key ? 'page' : null }, h('span', { class: 'ri', 'aria-hidden': 'true' }, emoji), h('span', { class: 'rl' }, label)));
+  const item = (href, emoji, label, key) => items.push(h('a', { class: `rail-item ${active === key ? 'active' : ''}`, href: `#${href}`, 'aria-current': active === key ? 'page' : null }, h('span', { class: 'ri', 'aria-hidden': 'true' }, appIcon(emoji, 46)), h('span', { class: 'rl' }, label)));
   if (me.kind === 'user') {
-    item('/t', '🏫', '학급', 'classes');
-    item('/t/lessons', '📚', '수업 자료', 'lessons');
-    item('/boards', '🖼️', '갤러리', 'boards');
-    item('/templates', '🎨', '도안', 'templates');
-    if (me.user.role === 'admin') item('/admin', '⚙️', '관리', 'admin');
+    item('/t', 'classes', '학급', 'classes');
+    item('/t/lessons', 'lessons', '수업 자료', 'lessons');
+    item('/boards', 'gallery', '갤러리', 'boards');
+    item('/templates', 'templates', '도안', 'templates');
+    if (me.user.role === 'admin') item('/admin', 'admin', '관리', 'admin');
   } else {
-    item('/s', '🏠', '홈', 'home');
-    item('/s/assignments', '✏️', '과제', 'assignments');
-    item('/s/works', '🗂️', '작품', 'works');
-    if (me.klass.gallery_enabled) item('/boards', '🖼️', '갤러리', 'boards');
-    item('/templates', '🖍️', '도안', 'templates');
+    item('/s', 'home', '홈', 'home');
+    item('/s/assignments', 'assignments', '과제', 'assignments');
+    item('/s/works', 'works', '작품', 'works');
+    if (me.klass.gallery_enabled) item('/boards', 'gallery', '갤러리', 'boards');
+    item('/templates', 'templates', '도안', 'templates');
   }
-  const avatar = h('button', { class: 'rail-avatar', 'aria-label': '프로필 메뉴', onclick: (e) => profileMenu(e.currentTarget) }, me.kind === 'user' ? (me.user.name || '선')[0] : me.student.avatar);
+  const avatar = h('button', { class: 'rail-avatar', 'aria-label': '프로필 메뉴', onclick: (e) => profileMenu(e.currentTarget) }, avatarEl(me.kind === 'user' ? { name: me.user.name, id: `t${me.user.id}` } : me.student, 46));
   const rail = h('nav', { class: 'rail no-print', 'aria-label': '메뉴' },
     h('a', { class: 'rail-logo', href: `#${homeFor(me)}`, 'aria-label': '미아트스쿨 홈' }, h('img', { src: '/icons/icon.svg', alt: '' })),
     items,
