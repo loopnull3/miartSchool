@@ -1,6 +1,6 @@
 // 교사용: 학급 · 학생 · 과제 관리
 import { Router } from 'express';
-import { one, all, run, tx } from '../db.js';
+import { one, all, run, tx, syncClassLogins } from '../db.js';
 import { HttpError, requireTeacher, requireOwnedClass, randomCode, randomPin, newAccessCode, randomPick } from '../auth.js';
 import { ANIMALS, FRUITS } from '../../shared/login-pictures.js';
 
@@ -8,20 +8,33 @@ const r = Router();
 // 아바타 색상 키 (화면에서는 이름 첫 글자 + 이 색으로 그린다)
 const AVATARS = ['tone0', 'tone1', 'tone2', 'tone3', 'tone4', 'tone5', 'tone6', 'tone7'];
 
-function newStudentLogin() {
-  return {
-    access_code: newAccessCode((c) => !!one('SELECT id FROM students WHERE access_code = ?', c)),
-    animal: randomPick(ANIMALS).key,
-    fruit: randomPick(FRUITS).key,
-  };
+// 학생마다 다른 개인 참여 코드 (QR 카드). 그림 비밀번호는 학급 공통.
+function newAccessCodeFor() {
+  return newAccessCode((c) => !!one('SELECT id FROM students WHERE access_code = ?', c));
 }
 
-// 예전 데이터(PIN만 있던 학생)에 참여 코드 채우기
+// 학급 그림 비밀번호 새로 뽑기 (이전과 다른 조합)
+function newClassPicture(prev = {}) {
+  let animal;
+  let fruit;
+  do {
+    animal = randomPick(ANIMALS).key;
+    fruit = randomPick(FRUITS).key;
+  } while (animal === prev.login_animal && fruit === prev.login_fruit);
+  return { animal, fruit };
+}
+
+function setClassPicture(classId, animal, fruit) {
+  run('UPDATE classes SET login_animal = ?, login_fruit = ? WHERE id = ?', animal, fruit, classId);
+  run('UPDATE students SET animal = ?, fruit = ? WHERE class_id = ?', animal, fruit, classId);
+}
+
+// 예전 데이터(PIN만 있던 학생)에 참여 코드 채우고, 그림 비밀번호를 학급 것과 맞추기
 export function backfillStudentLogins() {
-  for (const st of all('SELECT id FROM students WHERE access_code IS NULL OR animal IS NULL OR fruit IS NULL')) {
-    const l = newStudentLogin();
-    run('UPDATE students SET access_code = ?, animal = ?, fruit = ? WHERE id = ?', l.access_code, l.animal, l.fruit, st.id);
+  for (const st of all('SELECT id FROM students WHERE access_code IS NULL')) {
+    run('UPDATE students SET access_code = ? WHERE id = ?', newAccessCodeFor(), st.id);
   }
+  syncClassLogins();
 }
 
 function uniqueClassCode() {
@@ -52,7 +65,8 @@ r.post('/classes', (req, res) => {
   if (!name) throw new HttpError(400, '학급 이름을 입력해 주세요.');
   const grade = String(req.body?.grade || '').trim().slice(0, 20) || null;
   const code = uniqueClassCode();
-  const info = run('INSERT INTO classes (teacher_id, name, grade, code) VALUES (?, ?, ?, ?)', user.id, name, grade, code);
+  const pic = newClassPicture();
+  const info = run('INSERT INTO classes (teacher_id, name, grade, code, login_animal, login_fruit) VALUES (?, ?, ?, ?, ?, ?)', user.id, name, grade, code, pic.animal, pic.fruit);
   res.json(one('SELECT * FROM classes WHERE id = ?', Number(info.lastInsertRowid)));
 });
 
@@ -88,6 +102,17 @@ r.patch('/classes/:id', (req, res) => {
     b.checkin_enabled != null ? (b.checkin_enabled ? 1 : 0) : klass.checkin_enabled,
     klass.id,
   );
+  // 학급 그림 비밀번호 바꾸기: 직접 고르기(loginAnimal + loginFruit) 또는 새로 뽑기(resetLoginPicture)
+  if (b.resetLoginPicture) {
+    const pic = newClassPicture(klass);
+    setClassPicture(klass.id, pic.animal, pic.fruit);
+  } else if (b.loginAnimal != null || b.loginFruit != null) {
+    const animal = b.loginAnimal ?? klass.login_animal;
+    const fruit = b.loginFruit ?? klass.login_fruit;
+    if (!ANIMALS.some((a) => a.key === animal)) throw new HttpError(400, '동물 값이 올바르지 않습니다.');
+    if (!FRUITS.some((f) => f.key === fruit)) throw new HttpError(400, '과일 값이 올바르지 않습니다.');
+    setClassPicture(klass.id, animal, fruit);
+  }
   res.json(one('SELECT * FROM classes WHERE id = ?', klass.id));
 });
 
@@ -124,7 +149,6 @@ r.post('/classes/:id/students', (req, res) => {
   const created = tx(() =>
     parsed.map((p, i) => {
       const avatar = AVATARS[(existing + i) % AVATARS.length];
-      const l = newStudentLogin();
       const info = run(
         'INSERT INTO students (class_id, name, number, pin, avatar, access_code, animal, fruit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         klass.id,
@@ -132,9 +156,9 @@ r.post('/classes/:id/students', (req, res) => {
         p.number,
         randomPin(),
         avatar,
-        l.access_code,
-        l.animal,
-        l.fruit,
+        newAccessCodeFor(),
+        klass.login_animal,
+        klass.login_fruit,
       );
       return one('SELECT * FROM students WHERE id = ?', Number(info.lastInsertRowid));
     }),
@@ -156,27 +180,18 @@ r.patch('/students/:id', (req, res) => {
   if (!name) throw new HttpError(400, '이름을 입력해 주세요.');
   const number = b.number === '' || b.number === null ? null : b.number != null ? Number(b.number) : s.number;
   const avatar = b.avatar && AVATARS.includes(b.avatar) ? b.avatar : s.avatar;
-  let { access_code: code, animal, fruit } = s;
-  if (b.resetLogin) ({ access_code: code, animal, fruit } = newStudentLogin());
-  if (b.animal != null) {
-    if (!ANIMALS.some((a) => a.key === b.animal)) throw new HttpError(400, '동물 값이 올바르지 않습니다.');
-    animal = b.animal;
-  }
-  if (b.fruit != null) {
-    if (!FRUITS.some((f) => f.key === b.fruit)) throw new HttpError(400, '과일 값이 올바르지 않습니다.');
-    fruit = b.fruit;
-  }
+  if (b.animal != null || b.fruit != null) throw new HttpError(400, '그림 비밀번호는 학급 전체가 함께 써요. 학생 목록 위의 "우리 반 그림 비밀번호"에서 바꿔 주세요.');
+  // 참여 코드 재발급: 카드를 잃어버렸을 때. 예전 카드로 로그인한 기기는 로그아웃된다.
+  const code = b.resetLogin ? newAccessCodeFor() : s.access_code;
   run(
-    'UPDATE students SET name = ?, number = ?, avatar = ?, access_code = ?, animal = ?, fruit = ? WHERE id = ?',
+    'UPDATE students SET name = ?, number = ?, avatar = ?, access_code = ? WHERE id = ?',
     name,
     Number.isFinite(number) ? number : null,
     avatar,
     code,
-    animal,
-    fruit,
     s.id,
   );
-  if (b.resetLogin || animal !== s.animal || fruit !== s.fruit) run("DELETE FROM sessions WHERE kind = 'student' AND subject_id = ?", s.id);
+  if (b.resetLogin) run("DELETE FROM sessions WHERE kind = 'student' AND subject_id = ?", s.id);
   res.json(one('SELECT * FROM students WHERE id = ?', s.id));
 });
 

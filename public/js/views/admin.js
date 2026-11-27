@@ -1,6 +1,6 @@
 // 관리자: 현황 · 교사 승인 · 학교(기관) 인증 코드
 import { api } from '../api.js';
-import { h, clear, fill, toast, toastError, promptDialog, fmtDate } from '../ui.js';
+import { h, clear, fill, toast, toastError, promptDialog, fmtDate, modal } from '../ui.js';
 import { shell } from '../app.js';
 
 const STATUS = { pending: ['승인 대기', 'warn'], active: ['사용 중', 'ok'], disabled: ['중지', 'danger'] };
@@ -78,6 +78,8 @@ export async function adminPage() {
                         t.status !== 'active' ? h('button', { class: 'btn sm primary', onclick: () => setStatus(t, 'active') }, '승인') : null,
                         ' ',
                         t.status === 'active' ? h('button', { class: 'btn sm danger', onclick: () => setStatus(t, 'disabled') }, '중지') : null,
+                        ' ',
+                        h('button', { class: 'btn sm', onclick: () => editTeacher(t) }, '수정'),
                       ],
                 ),
               ),
@@ -86,6 +88,37 @@ export async function adminPage() {
         ),
       ),
     );
+  };
+  // 선생님 이름 · 이메일 · 학교 고치기 (이메일이 로그인 아이디)
+  const editTeacher = (t) => {
+    const name = h('input', { class: 'input', value: t.name, maxlength: 40 });
+    const email = h('input', { class: 'input', type: 'email', value: t.email });
+    const school = h('select', { class: 'input' },
+      h('option', { value: '' }, '학교 없음'),
+      schools.map((s) => h('option', { value: s.id, selected: t.school_id === s.id }, s.name)),
+    );
+    modal({
+      title: `${t.name} 선생님`,
+      body: h('div', { class: 'stack' },
+        h('label', { class: 'field' }, '이름', name),
+        h('label', { class: 'field' }, '이메일 (로그인할 때 입력)', email),
+        h('label', { class: 'field' }, '학교', school),
+      ),
+      actions: [
+        { label: '취소' },
+        { label: '저장', class: 'primary', onClick: async () => {
+          try {
+            const u = await api.patch(`/admin/teachers/${t.id}`, { name: name.value, email: email.value, schoolId: school.value ? Number(school.value) : null });
+            Object.assign(t, u);
+            renderTeachers();
+            toast('저장했어요', 'ok');
+          } catch (ex) {
+            toastError(ex);
+            return true;
+          }
+        } },
+      ],
+    });
   };
   const setStatus = async (t, status) => {
     try {
@@ -135,20 +168,17 @@ export async function adminPage() {
 
   renderTeachers();
   renderSchools();
-  const stat = (label, v) => h('div', { class: 'card flat stat' }, h('span', { class: 'stat-label' }, label), h('span', { class: 'stat-val' }, v));
   return shell(
     h('div', null,
       h('h1', null, '관리'),
-      h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' } },
-        stat('승인 대기', ov.pending),
-        stat('선생님', ov.teachers),
-        stat('학교', ov.schools),
-        stat('학급', ov.classes),
-        stat('학생', ov.students),
-        stat('제출 작품', ov.artworks),
-        stat('마음 탐색', ov.psych),
+      h('div', { class: 'summary-line' },
+        ov.pending ? h('span', { class: 'warn-text' }, '승인 대기 ', h('b', null, ov.pending)) : null,
+        h('span', null, '선생님 ', h('b', null, ov.teachers)),
+        h('span', null, '학교 ', h('b', null, ov.schools)),
+        h('span', null, '학생 ', h('b', null, ov.students)),
+        h('span', null, '작품 ', h('b', null, ov.artworks)),
+        ov.aiAvailable ? null : h('span', { class: 'small' }, 'AI 꺼짐 (.env의 ANTHROPIC_API_KEY)'),
       ),
-      ov.aiAvailable ? null : h('div', { class: 'notice warn mt' }, 'AI 키(ANTHROPIC_API_KEY)가 설정되지 않아 AI 주제 도안과 AI 요약이 꺼져 있어요. .env 파일에 키를 넣고 서버를 다시 시작하세요.'),
       h('div', { class: 'row between mt-lg' }, h('h2', { style: { margin: 0 } }, '학교(기관) 인증 코드'), h('button', { class: 'btn primary', onclick: async () => {
         const name = await promptDialog('학교(기관) 추가', { label: '이름', placeholder: '예) 미아트초등학교', okLabel: '추가' });
         if (!name) return;

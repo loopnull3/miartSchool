@@ -24,11 +24,8 @@ export async function home() {
   const me = session.me.user;
   return shell(
     h('div', null,
-      h('div', { class: 'row between' },
-        h('div', null, h('h1', null, `${me.name} 선생님, 안녕하세요!`), h('p', { class: 'muted', style: { margin: 0 } }, me.school_name || '오늘도 즐거운 미술 수업 되세요.')),
-        h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/t/lessons' }, glyph('book', 18), ' 수업 자료'), h('a', { class: 'btn', href: '#/try/watercolor' }, glyph('brush', 18), ' 드로잉 체험')),
-      ),
-      active.length ? null : h('div', { class: 'notice info mt' }, '먼저 학급을 만들고 학생을 등록해 보세요. 학생마다 QR 로그인 카드(참여 코드 + 동물·과일 그림)가 만들어져요.'),
+      h('h1', null, '내 학급'),
+      h('p', { class: 'muted', style: { margin: 0 } }, [me.name + ' 선생님', me.school_name].filter(Boolean).join(' · ')),
       list,
       archived.length
         ? h('details', { class: 'mt-lg' }, h('summary', { class: 'muted', style: { cursor: 'pointer', fontWeight: 700 } }, `보관한 학급 ${archived.length}개`), h('div', { class: 'grid mt' }, archived.map(classCard)))
@@ -41,13 +38,7 @@ export async function home() {
 function classCard(c) {
   return h('a', { class: `tile ${['c1', 'c2', 'c3', 'c4', 'c5', 'c6'][c.id % 6]}`, href: `#/t/c/${c.id}` },
     h('div', { class: 'row between' }, h('div', { class: 'tile-title' }, c.name), c.unreviewed_count ? h('span', { class: 'count-dot', title: '피드백 대기 작품' }, c.unreviewed_count) : null),
-    h('div', { class: 'tile-sub' }, c.grade || ''),
-    h('div', { class: 'row mt', style: { gap: '8px' } },
-      h('span', { class: 'badge' }, `학생 ${c.student_count}명`),
-      h('span', { class: 'badge' }, `작품 ${c.artwork_count}`),
-      c.open_assignments ? h('span', { class: 'badge primary' }, `과제 ${c.open_assignments}`) : null,
-      c.archived ? h('span', { class: 'badge warn' }, '보관됨') : null,
-    ),
+    h('div', { class: 'tile-sub' }, [c.grade, `학생 ${c.student_count}명`, c.open_assignments ? `과제 ${c.open_assignments}` : null, c.archived ? '보관됨' : null].filter(Boolean).join(' · ')),
   );
 }
 
@@ -70,13 +61,12 @@ function createClass() {
 }
 
 // ---------------- 학급 상세 ----------------
+// 탭은 5개만: 마음 날씨 · 그림 마음 탐색은 '마음' 탭 안에서, 갤러리보드는 왼쪽 '갤러리'에서
 const TABS = [
   ['students', '학생'],
   ['assignments', '과제'],
-  ['checkin', '마음 날씨'],
-  ['gallery', '제출 작품'],
-  ['boards', '갤러리보드'],
-  ['psych', '마음 탐색'],
+  ['gallery', '작품'],
+  ['checkin', '마음', ['checkin', 'psych']],
   ['settings', '설정'],
 ];
 
@@ -91,11 +81,14 @@ export async function classPage({ params }) {
         h('div', null,
           h('a', { href: '#/t', class: 'small' }, '‹ 내 학급'),
           h('h1', { style: { margin: '4px 0 0' } }, k.name),
-          h('p', { class: 'sub' }, [k.grade, `학생 ${data.students.length}명`].filter(Boolean).join(' · ')),
         ),
-        h('a', { class: 'btn', href: `#/t/c/${k.id}/cards` }, glyph('qr', 18), ' 로그인 카드'),
       ),
-      h('nav', { class: 'tabs' }, TABS.map(([key, label]) => h('a', { href: `#/t/c/${k.id}/${key}`, class: key === tab ? 'active' : '' }, label))),
+      h('nav', { class: 'tabs' }, TABS.map(([key, label, group]) => h('a', { href: `#/t/c/${k.id}/${key}`, class: (group || [key]).includes(tab) ? 'active' : '' }, label))),
+      tab === 'checkin' || tab === 'psych'
+        ? h('div', { class: 'segmented', style: { margin: '0 0 18px' } },
+            h('a', { class: tab === 'checkin' ? 'on' : '', href: `#/t/c/${k.id}/checkin` }, '마음 날씨'),
+            h('a', { class: tab === 'psych' ? 'on' : '', href: `#/t/c/${k.id}/psych` }, '그림 마음 탐색'))
+        : null,
       content,
     ),
     { active: 'classes' },
@@ -106,31 +99,96 @@ export async function classPage({ params }) {
 }
 
 // ---- 학생 ----
-function loginPics(st) {
-  return h('span', { class: 'row nowrap', style: { gap: '2px' } }, animalIcon(st.animal, 30), fruitIcon(st.fruit, 30));
+const labelOf = (list, key) => list.find((x) => x.key === key)?.label || '';
+
+// 학급 공통 그림 비밀번호 고르기 시트. 저장하면 갱신된 학급을 돌려준다.
+function classPictureSheet(k, onSaved) {
+  let animal = k.login_animal;
+  let fruit = k.login_fruit;
+  const aRow = h('div', { class: 'chips' });
+  const fRow = h('div', { class: 'chips' });
+  const draw = () => {
+    fill(aRow, ...ANIMALS.map((x) => h('button', { class: `pic-chip ${animal === x.key ? 'on' : ''}`, title: x.label, 'aria-label': x.label, 'aria-pressed': String(animal === x.key), onclick: () => { animal = x.key; draw(); } }, animalIcon(x.key, 44))));
+    fill(fRow, ...FRUITS.map((x) => h('button', { class: `pic-chip ${fruit === x.key ? 'on' : ''}`, title: x.label, 'aria-label': x.label, 'aria-pressed': String(fruit === x.key), onclick: () => { fruit = x.key; draw(); } }, fruitIcon(x.key, 44))));
+  };
+  draw();
+  modal({
+    title: '우리 반 그림 비밀번호',
+    body: h('div', { class: 'stack' },
+      h('p', { class: 'small muted', style: { margin: 0 } }, `${k.name} 학생 모두가 이 동물과 과일을 골라 로그인해요. 바꾸면 다음 로그인부터 새 그림을 써요.`),
+      h('div', { class: 'field' }, '1. 동물', aRow),
+      h('div', { class: 'field' }, '2. 과일', fRow),
+    ),
+    actions: [
+      { label: '취소' },
+      { label: '저장', class: 'primary', onClick: async () => {
+        try {
+          onSaved(await api.patch(`/classes/${k.id}`, { loginAnimal: animal, loginFruit: fruit }));
+          toast('그림 비밀번호를 바꿨어요. 학생들에게 알려 주세요.', 'ok');
+        } catch (ex) {
+          toastError(ex);
+          return true;
+        }
+      } },
+    ],
+  });
 }
 
 async function studentsTab(root, data) {
   const k = data.klass;
-  const reveal = new Set();
   const table = h('div');
+  const picCard = h('div', { class: 'card class-pic' });
+  const applyClass = (u) => {
+    Object.assign(k, u);
+    for (const st of data.students) Object.assign(st, { animal: k.login_animal, fruit: k.login_fruit });
+    renderPic();
+  };
+  const renderPic = () => {
+    fill(picCard,
+      h('div', { class: 'row between', style: { alignItems: 'center', gap: '16px' } },
+        h('div', { class: 'row nowrap', style: { gap: '14px', alignItems: 'center' } },
+          h('div', { class: 'row nowrap class-pic-icons', style: { gap: '6px' } },
+            h('figure', null, animalIcon(k.login_animal, 52), h('figcaption', null, labelOf(ANIMALS, k.login_animal))),
+            h('span', { class: 'class-pic-arrow' }, glyph('right', 18)),
+            h('figure', null, fruitIcon(k.login_fruit, 52), h('figcaption', null, labelOf(FRUITS, k.login_fruit))),
+          ),
+          h('div', null,
+            h('b', null, '우리 반 그림 비밀번호'),
+            h('div', { class: 'small muted' }, '반 친구 모두 같아요'),
+          ),
+        ),
+        h('div', { class: 'row nowrap', style: { gap: '8px' } },
+          h('button', { class: 'btn sm', onclick: async () => {
+            if (!(await confirmDialog('우리 반 그림 비밀번호를 새로 뽑을까요? 학생들은 다음 로그인부터 새 그림을 골라야 해요.', { okLabel: '새로 뽑기' }))) return;
+            try {
+              applyClass(await api.patch(`/classes/${k.id}`, { resetLoginPicture: true }));
+              toast('새 그림 비밀번호를 뽑았어요', 'ok');
+            } catch (ex) {
+              toastError(ex);
+            }
+          } }, '새로 뽑기'),
+          h('button', { class: 'btn sm primary', onclick: () => classPictureSheet(k, applyClass) }, '바꾸기'),
+        ),
+      ),
+    );
+  };
+  renderPic();
   const render = () => {
     clear(table);
     if (!data.students.length) {
-      table.append(emptyState('classes', '아직 학생이 없어요', '오른쪽에서 학생 이름을 한 줄에 한 명씩 입력해 등록해 보세요.'));
+      table.append(emptyState('classes', '아직 학생이 없어요', '오른쪽 위 학생 추가를 눌러 이름을 넣어 주세요.'));
       return;
     }
     table.append(
       h('div', { class: 'table-wrap' },
         h('table', { class: 'table' },
-          h('thead', null, h('tr', null, h('th', null, '번호'), h('th', null, '이름'), h('th', null, '참여 코드'), h('th', null, '그림 비밀번호'), h('th', null, '작품'), h('th', null, ''))),
+          h('thead', null, h('tr', null, h('th', null, '번호'), h('th', null, '이름'), h('th', null, '참여 코드'), h('th', null, '작품'), h('th', null, ''))),
           h('tbody', null,
             data.students.map((st) =>
               h('tr', null,
                 h('td', { class: 'num' }, st.number ?? '-'),
                 h('td', null, h('div', { class: 'row nowrap', style: { gap: '10px' } }, avatarEl(st, 32), h('b', null, st.name))),
                 h('td', null, h('span', { class: 'pin' }, st.access_code || '-')),
-                h('td', null, reveal.has(st.id) ? h('button', { class: 'btn sm ghost', style: { padding: '0 6px' }, onclick: () => { reveal.delete(st.id); render(); } }, loginPics(st)) : h('button', { class: 'btn sm ghost', onclick: () => { reveal.add(st.id); render(); } }, '보기')),
                 h('td', { class: 'num' }, h('a', { href: `#/t/c/${k.id}/gallery?student=${st.id}` }, `${st.artwork_count}점`)),
                 h('td', { style: { textAlign: 'right', whiteSpace: 'nowrap' } }, h('button', { class: 'btn sm', onclick: () => editStudent(st) }, '수정')),
               ),
@@ -144,28 +202,18 @@ async function studentsTab(root, data) {
   const editStudent = (st) => {
     const name = h('input', { class: 'input', value: st.name, maxlength: 20 });
     const number = h('input', { class: 'input', type: 'number', value: st.number ?? '', min: 1, max: 999 });
-    let animal = st.animal;
-    let fruit = st.fruit;
-    const aRow = h('div', { class: 'chips' });
-    const fRow = h('div', { class: 'chips' });
-    const draw = () => {
-      fill(aRow, ...ANIMALS.map((x) => h('button', { class: `pic-chip ${animal === x.key ? 'on' : ''}`, title: x.label, 'aria-label': x.label, onclick: () => { animal = x.key; draw(); } }, animalIcon(x.key, 40))));
-      fill(fRow, ...FRUITS.map((x) => h('button', { class: `pic-chip ${fruit === x.key ? 'on' : ''}`, title: x.label, 'aria-label': x.label, onclick: () => { fruit = x.key; draw(); } }, fruitIcon(x.key, 40))));
-    };
-    draw();
     modal({
       title: '학생 정보',
       body: h('div', { class: 'stack' },
         h('div', { class: 'grid', style: { gridTemplateColumns: '2fr 1fr', gap: '12px' } }, h('label', { class: 'field' }, '이름', name), h('label', { class: 'field' }, '번호', number)),
         h('div', { class: 'field' }, '참여 코드', h('div', { class: 'row' }, h('span', { class: 'pin', style: { fontSize: '1.3rem' } }, st.access_code), h('button', { class: 'btn sm', onclick: async () => {
-          if (!(await confirmDialog(`${st.name} 학생의 참여 코드와 그림 비밀번호를 새로 만들까요? 예전 카드로는 로그인할 수 없어요.`, { okLabel: '새로 만들기' }))) return;
+          if (!(await confirmDialog(`${st.name} 학생의 참여 코드를 새로 만들까요? 예전 카드로는 로그인할 수 없어요.`, { okLabel: '새로 만들기' }))) return;
           const u = await api.patch(`/students/${st.id}`, { resetLogin: true });
           Object.assign(st, u);
           render();
-          toast('새 로그인 정보를 만들었어요. 카드를 다시 인쇄해 주세요.', 'ok');
+          toast('새 참여 코드를 만들었어요. 카드를 다시 인쇄해 주세요.', 'ok');
         } }, '재발급'))),
-        h('div', { class: 'field' }, '그림 비밀번호 · 동물', aRow),
-        h('div', { class: 'field' }, '그림 비밀번호 · 과일', fRow),
+        h('div', { class: 'field' }, '그림 비밀번호', h('div', { class: 'row nowrap', style: { gap: '6px', alignItems: 'center' } }, animalIcon(k.login_animal, 36), fruitIcon(k.login_fruit, 36), h('span', { class: 'small muted' }, '우리 반 공통 · 학생 목록 위에서 바꿀 수 있어요'))),
       ),
       actions: [
         { label: '삭제', class: 'danger', onClick: async () => {
@@ -175,7 +223,7 @@ async function studentsTab(root, data) {
           render();
         } },
         { label: '저장', class: 'primary', onClick: async () => {
-          const u = await api.patch(`/students/${st.id}`, { name: name.value, number: number.value, animal, fruit });
+          const u = await api.patch(`/students/${st.id}`, { name: name.value, number: number.value });
           Object.assign(st, u);
           render();
           toast('저장했어요', 'ok');
@@ -184,41 +232,43 @@ async function studentsTab(root, data) {
     });
   };
 
-  const names = h('textarea', { class: 'input', placeholder: '1 김하늘\n2 이바다\n3 박구름', rows: 8 });
-  const addCard = h('div', { class: 'card' },
-    h('h3', null, '학생 등록'),
-    h('p', { class: 'small muted' }, '한 줄에 한 명씩 "번호 이름" 또는 "이름"을 입력하세요. 참여 코드와 그림 비밀번호는 자동으로 만들어져요.'),
-    names,
-    h('button', { class: 'btn primary block mt', onclick: async (e) => {
-      const btn = e.currentTarget;
-      btn.disabled = true;
-      try {
-        const created = await api.post(`/classes/${k.id}/students`, { names: names.value });
-        data.students.push(...created.map((x) => ({ ...x, artwork_count: 0 })));
-        data.students.sort((a, b) => (a.number ?? 999) - (b.number ?? 999) || a.name.localeCompare(b.name));
-        names.value = '';
-        render();
-        toast(`${created.length}명을 등록했어요`, 'ok');
-      } catch (ex) {
-        toastError(ex);
-      } finally {
-        btn.disabled = false;
-      }
-    } }, '등록하기'),
-    h('hr', { style: { border: 0, borderTop: '1px solid var(--line)', margin: '20px 0' } }),
-    h('h3', null, '학생 로그인 방법'),
-    h('ol', { class: 'steps-list small', style: { margin: '10px 0 16px' } },
-      h('li', null, '첫 화면에서 ', h('b', null, '학생 로그인')),
-      h('li', null, 'QR 카드를 카메라에 비추거나 참여 코드 6자리 입력'),
-      h('li', null, '카드에 있는 동물과 과일 그림 고르기'),
-    ),
-    h('a', { class: 'btn block', href: `#/t/c/${k.id}/cards` }, glyph('print', 18), ' QR 로그인 카드 인쇄'),
-  );
+  const addStudents = () => {
+    const names = h('textarea', { class: 'input', placeholder: '1 김하늘\n2 이바다\n3 박구름', rows: 8 });
+    modal({
+      title: '학생 추가',
+      body: h('div', { class: 'stack' }, h('p', { class: 'small muted', style: { margin: 0 } }, '한 줄에 한 명씩 "번호 이름" 또는 "이름"'), names),
+      actions: [
+        { label: '취소' },
+        { label: '추가', class: 'primary', onClick: async () => {
+          try {
+            const created = await api.post(`/classes/${k.id}/students`, { names: names.value });
+            data.students.push(...created.map((x) => ({ ...x, artwork_count: 0 })));
+            data.students.sort((a, b) => (a.number ?? 999) - (b.number ?? 999) || a.name.localeCompare(b.name));
+            render();
+            toast(`${created.length}명을 추가했어요`, 'ok');
+          } catch (ex) {
+            toastError(ex);
+            return true;
+          }
+        } },
+      ],
+    });
+    setTimeout(() => names.focus(), 30);
+  };
   render();
-  const layout = h('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: '20px', alignItems: 'start' } }, table, addCard);
-  const mq = window.matchMedia('(max-width: 900px)');
-  layout.style.gridTemplateColumns = mq.matches ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) 320px';
-  root.append(layout);
+  root.append(
+    h('div', { class: 'stack' },
+      h('div', { class: 'row between' },
+        h('div', { class: 'muted small' }, `학생 ${data.students.length}명`),
+        h('div', { class: 'row nowrap', style: { gap: '8px' } },
+          h('a', { class: 'btn', href: `#/t/c/${k.id}/cards` }, glyph('qr', 18), ' 로그인 카드'),
+          h('button', { class: 'btn primary', onclick: addStudents }, glyph('plus', 18), ' 학생 추가'),
+        ),
+      ),
+      picCard,
+      table,
+    ),
+  );
 }
 
 // ---- 과제 ----
@@ -228,7 +278,7 @@ async function assignmentsTab(root, data) {
   const render = () => {
     clear(list);
     if (!data.assignments.length) {
-      list.append(emptyState('assignments', '아직 낸 과제가 없어요', '주제와 도안을 골라 과제를 내 보세요. 학생 홈 화면에 바로 나타나요.'));
+      list.append(emptyState('assignments', '아직 낸 과제가 없어요', '새 과제를 내면 학생 화면에 바로 나타나요.'));
       return;
     }
     for (const g of data.assignments) {
@@ -238,14 +288,13 @@ async function assignmentsTab(root, data) {
           h('div', { style: { width: '96px', height: '72px', borderRadius: '12px', background: 'var(--surface-2)', display: 'grid', placeItems: 'center', overflow: 'hidden', flex: 'none', border: '1px solid var(--line)' } },
             thumb ? h('img', { src: thumb, alt: '', style: { width: '100%', height: '100%', objectFit: 'contain', background: '#fff' } }) : glyph(g.technique === 'oil' ? 'oil' : 'water', 30, 1.4)),
           h('div', { class: 'grow' },
-            h('div', { class: 'row', style: { gap: '8px' } }, h('h3', { style: { margin: 0 } }, g.title), g.status === 'closed' ? h('span', { class: 'badge' }, '마감') : h('span', { class: 'badge ok dot' }, '진행 중')),
-            g.description ? h('p', { class: 'small muted', style: { margin: '4px 0 0' } }, g.description) : null,
-            h('div', { class: 'small faint', style: { marginTop: '4px' } }, h('span', { class: 'badge', style: { marginRight: '6px' } }, TECH[g.technique] || '수채화'), g.start_at ? `${fmtDateTime(g.start_at)} ~ ${g.end_at ? fmtDateTime(g.end_at) : ''}` : `${fmtDate(g.created_at)} 출제${g.end_at ? ` · 마감 ${fmtDateTime(g.end_at)}` : ''}`),
+            h('h3', { style: { margin: 0 } }, g.title),
+            h('div', { class: 'small muted', style: { marginTop: '4px' } },
+              [g.status === 'closed' ? '마감' : '진행 중', TECH[g.technique] || '수채화', g.end_at ? `~ ${fmtDate(g.end_at)}` : null].filter(Boolean).join(' · ')),
           ),
-          h('div', { class: 'stack', style: { alignItems: 'flex-end', gap: '8px' } },
-            h('span', { class: 'badge primary' }, `제출 ${g.submitted_count}/${data.students.length}`),
-            h('div', { class: 'row', style: { gap: '6px' } },
-              h('button', { class: 'btn sm', onclick: () => submissionStatus(g, k) }, '제출 현황'),
+          h('div', { class: 'row nowrap', style: { gap: '6px' } },
+            h('button', { class: 'btn sm primary', onclick: () => submissionStatus(g, k) }, `제출 ${g.submitted_count}/${data.students.length}`),
+            h('div', { class: 'row nowrap', style: { gap: '6px' } },
               h('button', { class: 'btn sm', onclick: async () => {
                 const u = await api.patch(`/assignments/${g.id}`, { status: g.status === 'open' ? 'closed' : 'open' });
                 Object.assign(g, u);
@@ -264,7 +313,7 @@ async function assignmentsTab(root, data) {
     }
   };
   render();
-  root.append(h('div', { class: 'row between mb' }, h('h2', { style: { margin: 0 } }, '과제'), h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/t/lessons' }, glyph('book', 18), ' 수업 자료에서 가져오기'), h('button', { class: 'btn primary', onclick: () => newAssignment(k, data, render) }, '+ 새 과제'))), list);
+  root.append(h('div', { class: 'row between mb' }, h('a', { class: 'small', href: '#/t/lessons' }, '수업 자료에서 가져오기 ›'), h('button', { class: 'btn primary', onclick: () => newAssignment(k, data, render) }, glyph('plus', 18), ' 새 과제')), list);
 }
 
 const localInput = (d) => {
@@ -379,7 +428,7 @@ async function galleryTab(root, data) {
     data.students.map((s) => h('option', { value: s.id }, s.name)),
   );
   studentSel.value = filters.student;
-  const unrev = h('label', { class: 'check small' }, h('input', { type: 'checkbox', checked: !!filters.unreviewed, onchange: (e) => { filters.unreviewed = e.target.checked ? '1' : ''; load(); } }), '피드백 안 한 작품만');
+  const unrev = h('label', { class: 'check small' }, h('input', { type: 'checkbox', checked: !!filters.unreviewed, onchange: (e) => { filters.unreviewed = e.target.checked ? '1' : ''; load(); } }), '피드백 전만');
 
   async function load() {
     fill(grid, loading());
@@ -387,7 +436,7 @@ async function galleryTab(root, data) {
     const items = await api.get(`/classes/${k.id}/artworks${qs ? '?' + qs : ''}`);
     clear(grid);
     if (!items.length) {
-      grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('gallery', '작품이 없어요', '학생들이 제출한 작품이 여기에 모여요.')));
+      grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('gallery', '작품이 없어요')));
       return;
     }
     for (const a of items) grid.append(artTile(a, () => reviewArtwork(a.id, k, load)));
@@ -400,12 +449,11 @@ export function artTile(a, onClick) {
   return h('button', { class: 'art', onclick: onClick },
     h('div', { class: 'art-img' },
       h('img', { src: `/api/artworks/${a.id}/image?thumb=1&v=${encodeURIComponent(a.updated_at)}`, alt: a.title, loading: 'lazy' }),
-      h('div', { class: 'corner' }, a.feedback_count ? h('span', { class: 'badge ok' }, '피드백 완료') : null),
+      h('div', { class: 'corner' }, a.feedback_count ? h('span', { class: 'badge ok', title: '피드백 완료' }, glyph('check', 14, 2.6)) : null),
     ),
     h('div', { class: 'art-meta' },
       h('div', { class: 'art-title' }, a.title),
-      h('div', { class: 'art-sub' }, a.student_name ? a.student_name : '', a.assignment_title ? h('span', null, `· ${a.assignment_title}`) : null),
-      h('div', { class: 'art-sub' }, fmtDateTime(a.submitted_at || a.updated_at)),
+      h('div', { class: 'art-sub' }, a.student_name || fmtDate(a.submitted_at || a.updated_at)),
     ),
   );
 }
@@ -508,7 +556,7 @@ async function psychTab(root, data) {
   const render = () => {
     clear(list);
     if (!res.campaigns.length) {
-      list.append(emptyState('psych', '아직 진행한 마음 탐색이 없어요', '검사를 열면 학생 홈 화면에 "그림 마음 탐색" 카드가 나타나요. 집·나무·사람을 그리고 질문에 답하는 데 15~25분 정도 걸려요.'));
+      list.append(emptyState('psych', '아직 연 마음 탐색이 없어요', '열면 학생 홈에 나타나요 (15~25분).'));
       return;
     }
     for (const c of res.campaigns) {
@@ -517,9 +565,8 @@ async function psychTab(root, data) {
         h('div', { class: 'card row nowrap' },
           appIcon('psych', 44),
           h('div', { class: 'grow' },
-            h('div', { class: 'row', style: { gap: '8px' } }, h('h3', { style: { margin: 0 } }, c.title), c.status === 'open' ? h('span', { class: 'badge ok dot' }, '참여 중') : h('span', { class: 'badge' }, '닫힘')),
-            h('div', { class: 'small muted' }, `${fmtDate(c.created_at)} 시작 · 참여 ${c.completed}/${res.studentCount}명`),
-            h('div', { class: 'bar mt', style: { maxWidth: '320px', marginTop: '6px' } }, h('span', { style: { width: `${pct}%`, background: 'var(--mint)' } })),
+            h('h3', { style: { margin: 0 } }, c.title),
+            h('div', { class: 'small muted' }, `${c.status === 'open' ? '진행 중' : '닫힘'} · 참여 ${c.completed}/${res.studentCount}명 (${pct}%)`),
           ),
           h('div', { class: 'row', style: { gap: '6px' } },
             h('a', { class: 'btn primary sm', href: `#/t/psych/${c.id}` }, '학급 리포트'),
@@ -542,7 +589,7 @@ async function psychTab(root, data) {
   render();
   root.append(
     h('div', { class: 'row between mb' },
-      h('h2', { style: { margin: 0 } }, '그림 마음 탐색'),
+      h('div', { class: 'small muted' }, '참고 자료이며 진단이 아니에요. 결과는 선생님만 봐요.'),
       h('button', { class: 'btn primary', onclick: async () => {
         const title = await promptDialog('새 마음 탐색 열기', { label: '제목', value: `${new Date().getMonth() + 1}월 그림 마음 탐색`, okLabel: '열기' });
         if (title == null) return;
@@ -550,9 +597,8 @@ async function psychTab(root, data) {
         res.campaigns.unshift({ ...c, completed: 0 });
         render();
         toast('학생 홈 화면에 마음 탐색이 열렸어요', 'ok');
-      } }, '+ 새 검사 열기'),
+      } }, glyph('plus', 18), ' 새로 열기'),
     ),
-    h('div', { class: 'notice mb' }, '그림 마음 탐색은 아이를 이해하기 위한 참고 자료이며 진단이 아니에요. 결과는 선생님만 볼 수 있고, 학생에게는 긍정적인 한마디만 보여 줘요.'),
     list,
   );
 }
@@ -571,26 +617,21 @@ async function settingsTab(root, data) {
     }
   };
   const ai = await api.get('/ai/status');
+  const row = (label, sw) => h('label', { class: 'set-line' }, h('span', null, label), sw);
   root.append(
-    h('div', { class: 'grid two' },
+    h('div', { class: 'settings-simple' },
       h('div', { class: 'card stack' },
-        h('h3', null, '학급 정보'),
-        h('label', { class: 'field' }, '학급 이름', name),
-        h('label', { class: 'field' }, '학년/대상', grade),
+        h('div', { class: 'grid', style: { gridTemplateColumns: '2fr 1fr', gap: '12px' } }, h('label', { class: 'field' }, '학급 이름', name), h('label', { class: 'field' }, '학년/대상', grade)),
         h('button', { class: 'btn primary', onclick: () => save({ name: name.value, grade: grade.value }) }, '저장'),
       ),
-      h('div', { class: 'card stack' },
-        h('h3', null, '기능 설정'),
-        h('label', { class: 'check' }, switchInput(!!k.ai_enabled, (v) => save({ ai_enabled: v }, v ? 'AI 기능을 켰어요' : 'AI 기능을 껐어요')), 'AI 기능 사용 (AI 주제 도안, 마음 탐색 AI 요약)'),
-        ai.available ? null : h('div', { class: 'notice warn' }, '서버에 AI 키가 설정되지 않아 AI 기능은 현재 동작하지 않아요. 나머지 기능은 모두 사용할 수 있어요.'),
-        h('label', { class: 'check' }, switchInput(!!k.gallery_enabled, (v) => save({ gallery_enabled: v })), '학생들이 갤러리보드 보기'),
-        h('label', { class: 'check' }, switchInput(!!k.checkin_enabled, (v) => save({ checkin_enabled: v })), '마음 날씨 체크인 사용'),
+      h('div', { class: 'card set-list' },
+        row('마음 날씨 체크인', switchInput(!!k.checkin_enabled, (v) => save({ checkin_enabled: v }))),
+        row('학생 갤러리보드', switchInput(!!k.gallery_enabled, (v) => save({ gallery_enabled: v }))),
+        row(ai.available ? 'AI 도안 · AI 요약' : 'AI 도안 · AI 요약 (서버에 AI 키 없음)', switchInput(!!k.ai_enabled, (v) => save({ ai_enabled: v }, v ? 'AI 기능을 켰어요' : 'AI 기능을 껐어요'))),
       ),
-      h('div', { class: 'card stack' },
-        h('h3', null, '학급 보관 · 삭제'),
-        h('p', { class: 'small muted' }, '학기가 끝나면 학급을 보관하세요. 보관한 학급의 학생은 로그인할 수 없어요.'),
-        h('button', { class: 'btn', onclick: () => save({ archived: !k.archived }, k.archived ? '학급을 다시 열었어요' : '학급을 보관했어요').then(() => go('/t')) }, k.archived ? '보관 해제' : '학급 보관'),
-        h('button', { class: 'btn danger', onclick: async () => {
+      h('div', { class: 'row', style: { gap: '8px' } },
+        h('button', { class: 'btn ghost', onclick: () => save({ archived: !k.archived }, k.archived ? '학급을 다시 열었어요' : '학급을 보관했어요').then(() => go('/t')) }, k.archived ? '보관 해제' : '학급 보관'),
+        h('button', { class: 'btn ghost danger', onclick: async () => {
           const typed = await promptDialog('학급 삭제', { label: `학생·작품·검사 결과가 모두 지워져요. 확인을 위해 학급 이름 "${k.name}"을 입력하세요.`, okLabel: '영구 삭제' });
           if (typed == null) return;
           try {
@@ -600,7 +641,7 @@ async function settingsTab(root, data) {
           } catch (ex) {
             toastError(ex);
           }
-        } }, '학급 영구 삭제'),
+        } }, '학급 삭제'),
       ),
     ),
   );
@@ -633,7 +674,7 @@ export async function loginCards({ params }) {
         h('a', { href: `#/t/c/${k.id}/students`, class: 'btn ghost' }, '‹ 돌아가기'),
         h('button', { class: 'btn primary', onclick: () => window.print() }, glyph('print', 18), ' 인쇄하기'),
       ),
-      h('div', { class: 'no-print' }, h('h1', null, `${k.name} 로그인 카드`), h('p', { class: 'muted' }, '잘라서 나눠 주세요. 아이패드 카메라 앱으로 QR을 비추면 바로 로그인 화면이 열려요.')),
+      h('div', { class: 'no-print' }, h('h1', null, `${k.name} 로그인 카드`), h('p', { class: 'muted' }, `잘라서 나눠 주세요. 아이패드 카메라 앱으로 QR을 비추면 바로 로그인 화면이 열려요. 그림 비밀번호는 우리 반 모두 같아요 (${labelOf(ANIMALS, k.login_animal)} → ${labelOf(FRUITS, k.login_fruit)}).`)),
       data.students.length ? h('div', { class: 'cards-print' }, cards) : emptyState('classes', '등록된 학생이 없어요'),
     ),
     { active: 'classes' },
@@ -660,25 +701,32 @@ export function account() {
   const me = session.me.user;
   const cur = h('input', { class: 'input', type: 'password', autocomplete: 'current-password' });
   const next = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', minlength: 8 });
+  // 선생님은 이메일로 로그인하므로 비밀번호 바꾸기는 관리자(또는 비밀번호 로그인을 켠 서버)만
+  const pwBox = h('div', { hidden: true },
+    h('h3', { class: 'mt' }, '비밀번호 바꾸기'),
+    h('div', { class: 'stack' },
+      h('label', { class: 'field' }, '현재 비밀번호', cur),
+      h('label', { class: 'field' }, '새 비밀번호 (8자 이상)', next),
+      h('button', { class: 'btn primary', onclick: async () => {
+        try {
+          await api.post('/auth/password', { current: cur.value, next: next.value });
+          cur.value = next.value = '';
+          toast('비밀번호를 바꿨어요', 'ok');
+        } catch (ex) {
+          toastError(ex);
+        }
+      } }, '변경'),
+    ),
+  );
+  api.get('/auth/config').then((c) => { pwBox.hidden = me.role !== 'admin' && c.teacherEmailOnly; }).catch(() => {});
   return shell(
     h('div', { class: 'page narrow' },
       h('div', { class: 'card pad-lg' },
-        h('h1', null, '내 계정'),
-        h('p', { class: 'muted' }, `${me.name} · ${me.email}`, me.school_name ? ` · ${me.school_name}` : ''),
-        h('h3', { class: 'mt' }, '비밀번호 바꾸기'),
-        h('div', { class: 'stack' },
-          h('label', { class: 'field' }, '현재 비밀번호', cur),
-          h('label', { class: 'field' }, '새 비밀번호 (8자 이상)', next),
-          h('button', { class: 'btn primary', onclick: async () => {
-            try {
-              await api.post('/auth/password', { current: cur.value, next: next.value });
-              cur.value = next.value = '';
-              toast('비밀번호를 바꿨어요', 'ok');
-            } catch (ex) {
-              toastError(ex);
-            }
-          } }, '변경'),
+        h('div', { class: 'row nowrap', style: { gap: '14px', alignItems: 'center' } },
+          avatarEl(me, 56),
+          h('div', null, h('h1', { style: { margin: 0 } }, me.name), h('div', { class: 'muted' }, me.email), me.school_name ? h('div', { class: 'small muted' }, me.school_name) : null),
         ),
+        pwBox,
       ),
     ),
     { wide: '' },

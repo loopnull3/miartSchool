@@ -9,15 +9,20 @@ function formError() {
   return h('div', { class: 'form-error', role: 'alert' });
 }
 
+// 선생님 로그인: 이메일만 입력. 관리자 계정이면 비밀번호 칸이 나타난다.
 export function login({ me }) {
   if (me.kind === 'user') {
     go(homeFor(me));
     return null;
   }
-  const email = h('input', { class: 'input', type: 'email', autocomplete: 'username', required: true, placeholder: 'teacher@school.kr' });
-  const pw = h('input', { class: 'input', type: 'password', autocomplete: 'current-password', required: true });
+  const email = h('input', { class: 'input lg', type: 'email', autocomplete: 'username', required: true, placeholder: '이메일 주소', 'aria-label': '이메일' });
+  const pw = h('input', { class: 'input lg', type: 'password', autocomplete: 'current-password', placeholder: '비밀번호', 'aria-label': '비밀번호' });
+  const pwField = h('div', { hidden: true }, pw);
   const err = formError();
   const btn = h('button', { class: 'btn primary block lg', type: 'submit' }, '로그인');
+  api.get('/auth/config').then((c) => {
+    if (!c.teacherEmailOnly) pwField.hidden = false;
+  }).catch(() => {});
   const form = h(
     'form',
     {
@@ -27,29 +32,31 @@ export function login({ me }) {
         err.textContent = '';
         btn.disabled = true;
         try {
-          await api.post('/auth/login', { email: email.value, password: pw.value });
+          await api.post('/auth/login', pwField.hidden ? { email: email.value } : { email: email.value, password: pw.value });
           await refreshMe();
           go(homeFor(session.me));
         } catch (ex) {
-          err.textContent = ex.message;
+          if (ex.data?.needPassword && pwField.hidden) {
+            pwField.hidden = false;
+            pw.focus();
+          } else err.textContent = ex.message;
         } finally {
           btn.disabled = false;
         }
       },
     },
-    h('label', { class: 'field' }, '이메일', email),
-    h('label', { class: 'field' }, '비밀번호', pw),
+    email,
+    pwField,
     err,
     btn,
   );
   return shell(
-    h('div', { class: 'page narrow' },
-      h('div', { class: 'card pad-lg mt' },
+    h('div', { class: 'auth-wrap' },
+      h('div', { class: 'auth-card' },
+        appIcon('classes', 56),
         h('h1', null, '선생님 로그인'),
-        h('p', { class: 'muted' }, '학교(기관)에서 승인된 선생님만 사용할 수 있어요.'),
         form,
-        h('p', { class: 'center mt small' }, '처음이신가요? ', h('a', { href: '#/register' }, '가입 신청하기')),
-        h('p', { class: 'center small' }, '학생이라면 ', h('a', { href: '#/student/login' }, '학생 로그인'), '으로 가세요.'),
+        h('div', { class: 'auth-links' }, h('a', { href: '#/register' }, '가입하기'), h('span', null, '·'), h('a', { href: '#/student/login' }, '학생 로그인')),
       ),
     ),
     { wide: '' },
@@ -57,14 +64,21 @@ export function login({ me }) {
 }
 
 export function register() {
-  const name = h('input', { class: 'input', required: true, maxlength: 40, autocomplete: 'name' });
-  const email = h('input', { class: 'input', type: 'email', required: true, autocomplete: 'username' });
-  const pw = h('input', { class: 'input', type: 'password', required: true, minlength: 8, autocomplete: 'new-password' });
-  const code = h('input', { class: 'input', placeholder: '예) AB12CD34 (없으면 비워 두세요)', maxlength: 12, style: { textTransform: 'uppercase' } });
-  const school = h('input', { class: 'input', placeholder: '예) 미아트초등학교', maxlength: 60 });
+  const name = h('input', { class: 'input lg', required: true, maxlength: 40, autocomplete: 'name', placeholder: '이름', 'aria-label': '이름' });
+  const email = h('input', { class: 'input lg', type: 'email', required: true, autocomplete: 'username', placeholder: '이메일 주소', 'aria-label': '이메일' });
+  const pw = h('input', { class: 'input lg', type: 'password', minlength: 8, autocomplete: 'new-password', placeholder: '비밀번호 (8자 이상)', 'aria-label': '비밀번호' });
+  const pwField = h('div', { hidden: true }, pw);
+  const code = h('input', { class: 'input lg', placeholder: '학교 인증 코드 (있으면)', 'aria-label': '학교 인증 코드', maxlength: 12, style: { textTransform: 'uppercase' } });
+  const school = h('input', { class: 'input lg', placeholder: '학교(기관) 이름', 'aria-label': '학교 이름', maxlength: 60 });
   const err = formError();
-  const btn = h('button', { class: 'btn primary block lg', type: 'submit' }, '가입 신청');
-  const body = h('div');
+  const btn = h('button', { class: 'btn primary block lg', type: 'submit' }, '가입하기');
+  api.get('/auth/config').then((c) => {
+    if (!c.teacherEmailOnly) {
+      pwField.hidden = false;
+      pw.required = true;
+    }
+  }).catch(() => {});
+  const body = h('div', { class: 'auth-card' });
   const form = h(
     'form',
     {
@@ -74,19 +88,19 @@ export function register() {
         err.textContent = '';
         btn.disabled = true;
         try {
-          const r = await api.post('/auth/register', { name: name.value, email: email.value, password: pw.value, schoolCode: code.value, schoolName: school.value });
+          const payload = { name: name.value, email: email.value, schoolCode: code.value, schoolName: school.value };
+          if (!pwField.hidden) payload.password = pw.value;
+          const r = await api.post('/auth/register', payload);
           if (r.status === 'active') {
             await refreshMe();
-            toast('가입이 완료됐어요. 환영합니다!', 'ok');
+            toast('환영합니다!', 'ok');
             go('/t');
           } else {
-            fill(body, 
-              h('div', { class: 'center' },
-                appIcon('submitted', 64),
-                h('h2', null, '가입 신청이 접수됐어요'),
-                h('p', { class: 'muted' }, '관리자가 승인하면 로그인할 수 있어요. 학교 인증 코드를 받으셨다면 코드를 넣어 다시 가입하면 바로 사용할 수 있어요.'),
-                h('a', { class: 'btn', href: '#/login' }, '로그인 화면으로'),
-              ),
+            fill(body,
+              appIcon('submitted', 56),
+              h('h1', null, '신청이 접수됐어요'),
+              h('p', { class: 'muted' }, '관리자가 승인하면 이메일로 로그인할 수 있어요.'),
+              h('a', { class: 'btn block lg', href: '#/login' }, '로그인 화면으로'),
             );
           }
         } catch (ex) {
@@ -96,16 +110,22 @@ export function register() {
         }
       },
     },
-    h('label', { class: 'field' }, '이름', name),
-    h('label', { class: 'field' }, '이메일', email),
-    h('label', { class: 'field' }, '비밀번호 (8자 이상)', pw),
-    h('label', { class: 'field' }, '학교 인증 코드', code),
-    h('label', { class: 'field' }, '학교(기관) 이름 — 인증 코드가 없을 때', school),
+    name,
+    email,
+    pwField,
+    code,
+    school,
     err,
     btn,
   );
-  body.append(h('h1', null, '선생님 가입 신청'), h('p', { class: 'muted' }, '학교 인증 코드가 있으면 바로 사용할 수 있고, 없으면 관리자 승인 후 사용할 수 있어요.'), form);
-  return shell(h('div', { class: 'page narrow' }, h('div', { class: 'card pad-lg mt' }, body)), { wide: '' });
+  body.append(
+    appIcon('classes', 56),
+    h('h1', null, '선생님 가입'),
+    h('p', { class: 'muted small' }, '학교 인증 코드가 있으면 바로 시작해요.'),
+    form,
+    h('div', { class: 'auth-links' }, h('a', { href: '#/login' }, '이미 가입했어요')),
+  );
+  return shell(h('div', { class: 'auth-wrap' }, body), { wide: '' });
 }
 
 // 학생 로그인: [QR 코드 | 참여 코드] → 동물 → 과일
@@ -161,7 +181,6 @@ export async function studentLogin({ params, query, me }) {
     fill(body, 
       dots(0),
       h('h1', null, '학생 로그인'),
-      h('p', { class: 'muted', style: { margin: 0 } }, '선생님이 나눠 준 카드로 로그인해요.'),
       tabs(),
     );
     if (tab === 'qr') renderQr();
@@ -173,9 +192,8 @@ export async function studentLogin({ params, query, me }) {
     const err = formError();
     body.append(
       box,
-      h('p', { class: 'muted', style: { margin: '6px 0 0' } }, '카드의 QR 코드를 카메라에 비춰 주세요.'),
+      h('p', { class: 'muted', style: { margin: '6px 0 0' } }, '카드의 QR을 비춰 주세요'),
       err,
-      h('p', { class: 'small faint', style: { margin: '10px 0 0' } }, '아이패드 카메라 앱으로 카드를 비춰도 바로 들어올 수 있어요.'),
     );
     try {
       const { createScanner } = await import('../qr.js');
@@ -189,13 +207,15 @@ export async function studentLogin({ params, query, me }) {
           }
           await verify(code, err);
         },
-        onError: (e) => {
-          err.textContent = e?.message || String(e);
-        },
+        onError: () => {},
       });
-      await scanner.start();
-    } catch (e) {
-      err.textContent = e?.message || '카메라를 쓸 수 없어요. 참여 코드로 로그인해 주세요.';
+      if (!(await scanner.start())) throw new Error('camera');
+    } catch {
+      // 카메라가 없거나 막혀 있으면 참여 코드 입력으로 바로 넘어간다
+      if (tab !== 'qr' || !box.isConnected) return;
+      tab = 'code';
+      stepStart();
+      body.append(h('p', { class: 'small faint', style: { margin: '4px 0 0' } }, '카메라를 쓸 수 없어서 참여 코드로 들어가요.'));
     }
   }
 
@@ -275,7 +295,7 @@ export async function studentLogin({ params, query, me }) {
       dots(kind === 'animal' ? 1 : 2),
       avatarEl({ name: student.name, id: student.id }, 72),
       h('h1', { class: 'mt', style: { marginBottom: '4px' } }, kind === 'animal' ? '어떤 동물인가요?' : '어떤 과일인가요?'),
-      h('p', { class: 'muted', style: { margin: 0 } }, `${student.name} 학생 · ${student.className}`, h('br'), '카드에 있는 그림을 골라 주세요.'),
+      h('p', { class: 'muted', style: { margin: 0 } }, `${student.name} · ${student.className}`),
       grid,
       err,
       h('button', { class: 'btn ghost mt', onclick: () => (kind === 'fruit' ? stepPicture(code, student, 'animal', {}) : stepStart()) }, glyph('left', 16), ' 이전'),

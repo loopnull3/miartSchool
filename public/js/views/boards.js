@@ -98,7 +98,7 @@ export async function boardsPage() {
   return shell(
     h('div', null,
       h('div', { class: 'page-head' },
-        h('div', null, h('h1', null, '갤러리보드'), h('p', { class: 'sub' }, '우리 반, 우리 학교의 작품을 안전하게 나누고 감상해요.')),
+        h('h1', null, '갤러리보드'),
         h('div', { class: 'row' }, seg, isTeacher ? h('button', { class: 'btn primary', onclick: () => boardEditor(null, (b) => go(`/boards/${b.id}`)) }, '+ 새 보드') : null),
       ),
       grid,

@@ -23,7 +23,7 @@ r.get('/admin/teachers', (req, res) => {
   requireAdmin(req);
   res.json(
     all(
-      `SELECT u.id, u.email, u.name, u.role, u.status, u.school_name, u.created_at,
+      `SELECT u.id, u.email, u.name, u.role, u.status, u.school_id, u.school_name, u.created_at,
               (SELECT COUNT(*) FROM classes c WHERE c.teacher_id = u.id AND c.archived = 0) AS class_count
          FROM users u ORDER BY (u.status = 'pending') DESC, u.created_at DESC`,
     ),
@@ -40,6 +40,31 @@ r.post('/admin/teachers/:id/status', (req, res) => {
   if (!info.changes) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
   if (status !== 'active') run("DELETE FROM sessions WHERE kind = 'user' AND subject_id = ?", id);
   res.json({ ok: true });
+});
+
+// 선생님 정보 고치기 (이름 · 이메일 · 학교). 이메일로 로그인하므로 이메일이 바뀌면 기존 로그인은 끊는다.
+r.patch('/admin/teachers/:id', (req, res) => {
+  requireAdmin(req);
+  const id = Number(req.params.id);
+  const u = one('SELECT * FROM users WHERE id = ?', id);
+  if (!u) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
+  const b = req.body || {};
+  const name = b.name != null ? String(b.name).trim().slice(0, 40) : u.name;
+  if (!name) throw new HttpError(400, '이름을 입력해 주세요.');
+  const email = b.email != null ? String(b.email).trim() : u.email;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, '이메일 형식을 확인해 주세요.');
+  if (email.toLowerCase() !== u.email.toLowerCase() && one('SELECT id FROM users WHERE email = ?', email)) throw new HttpError(409, '이미 쓰고 있는 이메일입니다.');
+  let schoolId = u.school_id;
+  let schoolName = u.school_name;
+  if (b.schoolId !== undefined) {
+    const s = b.schoolId ? one('SELECT * FROM schools WHERE id = ?', Number(b.schoolId)) : null;
+    if (b.schoolId && !s) throw new HttpError(400, '학교를 찾을 수 없습니다.');
+    schoolId = s?.id ?? null;
+    schoolName = s?.name ?? null;
+  }
+  run('UPDATE users SET name = ?, email = ?, school_id = ?, school_name = ? WHERE id = ?', name, email, schoolId, schoolName, id);
+  if (email.toLowerCase() !== u.email.toLowerCase()) run("DELETE FROM sessions WHERE kind = 'user' AND subject_id = ?", id);
+  res.json(one('SELECT id, email, name, role, status, school_id, school_name, created_at FROM users WHERE id = ?', id));
 });
 
 r.get('/admin/schools', (req, res) => {

@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ANIMALS, FRUITS } from '../shared/login-pictures.js';
 
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || './data');
 export const IMAGE_DIR = path.join(DATA_DIR, 'images');
@@ -261,8 +262,32 @@ function migrate(d) {
   addColumn(d, 'assignments', 'materials_json', 'TEXT');
   addColumn(d, 'assignments', 'lesson_id', 'TEXT');
   addColumn(d, 'artworks', 'technique', "TEXT NOT NULL DEFAULT 'watercolor'");
+  // 그림 비밀번호(동물+과일)는 학급 전체가 같은 것을 쓴다.
+  addColumn(d, 'classes', 'login_animal', 'TEXT');
+  addColumn(d, 'classes', 'login_fruit', 'TEXT');
+  syncClassLogins(d);
   // 예전 이모지 아바타 → 색상 키 (아이콘은 이름 첫 글자 아바타로 그림)
   d.exec("UPDATE students SET avatar = 'tone' || (id % 8) WHERE avatar NOT LIKE 'tone%'");
+}
+
+const pick = (list) => list[Math.floor(Math.random() * list.length)].key;
+const isAnimal = (k) => ANIMALS.some((a) => a.key === k);
+const isFruit = (k) => FRUITS.some((f) => f.key === k);
+
+// 학급 그림 비밀번호가 비어 있으면 채우고(첫 학생 것을 이어받거나 새로 뽑기), 학생들을 학급 것과 맞춘다
+export function syncClassLogins(d = db) {
+  for (const c of d.prepare('SELECT id, login_animal, login_fruit FROM classes').all()) {
+    if (isAnimal(c.login_animal) && isFruit(c.login_fruit)) continue;
+    const first = d.prepare('SELECT animal, fruit FROM students WHERE class_id = ? ORDER BY id LIMIT 1').get(c.id);
+    const animal = isAnimal(first?.animal) ? first.animal : pick(ANIMALS);
+    const fruit = isFruit(first?.fruit) ? first.fruit : pick(FRUITS);
+    d.prepare('UPDATE classes SET login_animal = ?, login_fruit = ? WHERE id = ?').run(animal, fruit, c.id);
+  }
+  d.exec(`UPDATE students SET
+            animal = (SELECT c.login_animal FROM classes c WHERE c.id = students.class_id),
+            fruit = (SELECT c.login_fruit FROM classes c WHERE c.id = students.class_id)
+          WHERE EXISTS (SELECT 1 FROM classes c WHERE c.id = students.class_id
+                          AND (students.animal IS NOT c.login_animal OR students.fruit IS NOT c.login_fruit))`);
 }
 
 export function getDb() {

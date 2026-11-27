@@ -95,12 +95,16 @@ export async function libraryPage({ query }) {
   const [lessons, my] = await Promise.all([api.get('/lessons'), api.get('/my-lessons')]);
   const f = { grade: '', technique: '', season: '', q: '' };
   const grid = h('div', { class: 'grid' });
-  const chipsBox = h('div', { class: 'stack', style: { gap: '10px' } });
+  // 거르기는 한 줄: 학년 · 도구 · 계절 선택 상자 + 검색
+  const chipsBox = h('div', { class: 'row', style: { gap: '8px' } });
   const uniq = (k) => [...new Set(lessons.map((l) => l[k]).filter(Boolean))];
-  const chipRow = (key, label, values, fmt = (v) => v) =>
-    h('div', { class: 'row', style: { gap: '8px' } }, h('span', { class: 'small faint', style: { width: '40px' } }, label),
-      h('div', { class: 'chips' }, h('button', { class: `chip ${!f[key] ? 'on' : ''}`, onclick: () => { f[key] = ''; render(); } }, '전체'), values.map((v) => h('button', { class: `chip ${f[key] === v ? 'on' : ''}`, onclick: () => { f[key] = v; render(); } }, fmt(v)))));
-  const search = h('input', { class: 'input', type: 'search', placeholder: '수업 검색 (예: 겨울, 대칭, 과학)', style: { maxWidth: '320px' }, oninput: () => { f.q = search.value.trim(); renderGrid(); } });
+  const selectFor = (key, label, values, fmt = (v) => v) => {
+    const sel = h('select', { class: 'input', 'aria-label': label, style: { width: 'auto' }, onchange: () => { f[key] = sel.value; renderGrid(); } },
+      h('option', { value: '' }, `${label} 전체`), values.map((v) => h('option', { value: v }, fmt(v))));
+    sel.value = f[key];
+    return sel;
+  };
+  const search = h('input', { class: 'input', type: 'search', placeholder: '수업 검색', style: { maxWidth: '260px' }, oninput: () => { f.q = search.value.trim(); renderGrid(); } });
   function renderGrid() {
     clear(grid);
     const q = f.q.toLowerCase();
@@ -112,10 +116,10 @@ export async function libraryPage({ query }) {
     for (const l of items) grid.append(lessonCard(l, () => lessonDetail(l, { onSaved: renderGrid })));
   }
   function render() {
-    fill(chipsBox, 
-      chipRow('grade', '학년', uniq('grade')),
-      chipRow('technique', '도구', uniq('technique'), (v) => TECH[v] || v),
-      chipRow('season', '계절', uniq('season')),
+    fill(chipsBox,
+      selectFor('grade', '학년', uniq('grade')),
+      selectFor('technique', '도구', uniq('technique'), (v) => TECH[v] || v),
+      selectFor('season', '계절', uniq('season')),
     );
     renderGrid();
   }
@@ -126,8 +130,8 @@ export async function libraryPage({ query }) {
   }
   return shell(
     h('div', null,
-      h('div', { class: 'page-head' }, h('div', null, h('h1', null, '수업 자료'), h('p', { class: 'sub' }, '수업안을 골라 내 수업으로 저장하고, 학급에서 바로 시작하세요.')), tabs('lib', my.length)),
-      h('div', { class: 'toolbar-row', style: { alignItems: 'flex-start' } }, chipsBox, h('div', { class: 'search' }, search)),
+      h('div', { class: 'page-head' }, h('h1', null, '수업 자료'), tabs('lib', my.length)),
+      h('div', { class: 'toolbar-row' }, chipsBox, h('div', { class: 'search' }, search)),
       grid,
     ),
     { active: 'lessons' },
@@ -242,7 +246,7 @@ export async function myLessonsPage() {
   render();
   return shell(
     h('div', null,
-      h('div', { class: 'page-head' }, h('div', null, h('h1', null, '내 수업'), h('p', { class: 'sub' }, '저장한 수업을 고치고, 학급에서 시작하세요.')), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => lessonEditor(null, reload) }, '+ 직접 만들기'), tabs('my', my.length))),
+      h('div', { class: 'page-head' }, h('h1', null, '내 수업'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => lessonEditor(null, reload) }, glyph('plus', 18), ' 직접 만들기'), tabs('my', my.length))),
       grid,
     ),
     { active: 'lessons' },

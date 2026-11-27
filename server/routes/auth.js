@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { one, run } from '../db.js';
 import {
@@ -14,11 +15,17 @@ import {
 const r = Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// 선생님은 이메일만 입력해서 로그인한다 (TEACHER_EMAIL_LOGIN=false 이면 비밀번호도 받음). 관리자는 항상 비밀번호.
+export const teacherEmailOnly = () => process.env.TEACHER_EMAIL_LOGIN !== 'false';
+
+r.get('/auth/config', (_req, res) => res.json({ teacherEmailOnly: teacherEmailOnly() }));
+
 r.post('/auth/register', (req, res) => {
   const { email, password, name, schoolCode, schoolName } = req.body || {};
   checkRateLimit(`register:${req.ip}`, 20, 3600_000);
   if (!EMAIL_RE.test(String(email || ''))) throw new HttpError(400, '이메일 형식을 확인해 주세요.');
-  if (String(password || '').length < 8) throw new HttpError(400, '비밀번호는 8자 이상이어야 합니다.');
+  const emailOnly = teacherEmailOnly();
+  if ((!emailOnly || password) && String(password || '').length < 8) throw new HttpError(400, '비밀번호는 8자 이상이어야 합니다.');
   const cleanName = String(name || '').trim().slice(0, 40);
   if (!cleanName) throw new HttpError(400, '이름을 입력해 주세요.');
   if (one('SELECT id FROM users WHERE email = ?', email)) throw new HttpError(409, '이미 가입된 이메일입니다.');
@@ -37,7 +44,8 @@ r.post('/auth/register', (req, res) => {
     cleanName,
     school?.id ?? null,
     school?.name ?? (String(schoolName || '').trim().slice(0, 60) || null),
-    hashPassword(String(password)),
+    // 이메일만 쓰는 경우에도 칸은 채워 둔다 (아무도 모르는 무작위 비밀번호)
+    hashPassword(password ? String(password) : crypto.randomUUID()),
     status,
   );
   if (status === 'active') createSession(res, 'user', Number(info.lastInsertRowid));
@@ -45,13 +53,21 @@ r.post('/auth/register', (req, res) => {
 });
 
 r.post('/auth/login', (req, res) => {
-  const { email, password } = req.body || {};
-  checkRateLimit(`login:${String(email).toLowerCase()}`, 10, 10 * 60_000);
-  const user = one('SELECT * FROM users WHERE email = ?', String(email || '').trim());
-  if (!user || !verifyPassword(String(password || ''), user.password_hash)) throw new HttpError(401, '이메일 또는 비밀번호가 올바르지 않습니다.');
+  const { password } = req.body || {};
+  const email = String(req.body?.email || '').trim();
+  checkRateLimit(`login-ip:${req.ip}`, 60, 10 * 60_000);
+  checkRateLimit(`login:${email.toLowerCase()}`, 10, 10 * 60_000);
+  if (!EMAIL_RE.test(email)) throw new HttpError(400, '이메일 형식을 확인해 주세요.');
+  const user = one('SELECT * FROM users WHERE email = ?', email);
+  if (teacherEmailOnly() && !password) {
+    if (!user) throw new HttpError(401, '등록된 선생님 이메일이 아니에요. 처음이면 가입 신청을 해 주세요.');
+    if (user.role !== 'teacher') throw new HttpError(401, '관리자 계정은 비밀번호도 입력해 주세요.', { needPassword: true });
+  } else if (!user || !verifyPassword(String(password || ''), user.password_hash)) {
+    throw new HttpError(401, '이메일 또는 비밀번호가 올바르지 않습니다.');
+  }
   if (user.status === 'pending') throw new HttpError(403, '관리자 승인을 기다리고 있어요. 승인 후 로그인할 수 있습니다.');
   if (user.status === 'disabled') throw new HttpError(403, '사용이 중지된 계정입니다. 관리자에게 문의하세요.');
-  clearRateLimit(`login:${String(email).toLowerCase()}`);
+  clearRateLimit(`login:${email.toLowerCase()}`);
   createSession(res, 'user', user.id);
   res.json({ ok: true, role: user.role });
 });

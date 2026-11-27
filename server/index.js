@@ -4,7 +4,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { openDb, closeDb, one, run } from './db.js';
-import { sessionMiddleware, HttpError, hashPassword, purgeExpiredSessions } from './auth.js';
+import { sessionMiddleware, HttpError, hashPassword, purgeExpiredSessions, randomCode } from './auth.js';
+import crypto from 'node:crypto';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import classRoutes from './routes/classes.js';
@@ -50,6 +51,31 @@ export function ensureAdmin() {
     run("INSERT INTO users (role, email, name, password_hash, status) VALUES ('admin', ?, '관리자', ?, 'active')", email, hashPassword(password));
   }
   console.log(`[miart] 관리자 계정 준비됨: ${email}`);
+}
+
+// 처음부터 넣어 둘 선생님 계정: "이름|학교|이메일" 을 ; 로 이어서. 비워 두면(INITIAL_TEACHERS=) 만들지 않는다.
+// 이미 있는 이메일은 건드리지 않는다. 이메일은 관리자 화면에서 바꿀 수 있다.
+export const DEFAULT_INITIAL_TEACHERS = '최규민|범어초등학교|kyumin@miart.school';
+
+export function ensureInitialTeachers(spec = process.env.INITIAL_TEACHERS ?? DEFAULT_INITIAL_TEACHERS) {
+  for (const entry of String(spec).split(/[;\n]/)) {
+    const [name, schoolName, email] = entry.split('|').map((x) => (x || '').trim());
+    if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+    if (one('SELECT id FROM users WHERE email = ?', email)) continue;
+    let school = schoolName ? one('SELECT * FROM schools WHERE name = ?', schoolName) : null;
+    if (schoolName && !school) {
+      let code;
+      do code = randomCode(8);
+      while (one('SELECT id FROM schools WHERE invite_code = ?', code));
+      const info = run('INSERT INTO schools (name, invite_code) VALUES (?, ?)', schoolName, code);
+      school = one('SELECT * FROM schools WHERE id = ?', Number(info.lastInsertRowid));
+    }
+    run(
+      "INSERT INTO users (role, email, name, school_id, school_name, password_hash, status) VALUES ('teacher', ?, ?, ?, ?, ?, 'active')",
+      email, name, school?.id ?? null, school?.name ?? (schoolName || null), hashPassword(crypto.randomUUID()),
+    );
+    console.log(`[miart] 선생님 계정 준비됨: ${name} (${school?.name || '학교 없음'}) · ${email}`);
+  }
 }
 
 export function createApp() {
@@ -113,6 +139,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   loadEnv();
   openDb();
   ensureAdmin();
+  ensureInitialTeachers();
   backfillStudentLogins();
   purgeExpiredSessions();
   setInterval(purgeExpiredSessions, 3600_000).unref();

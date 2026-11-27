@@ -243,7 +243,6 @@ export async function checkinTab(root, data) {
     const isThisMonth = r.today.startsWith(month);
     const elapsed = isThisMonth ? Number(r.today.slice(8)) : days;
     const todayRows = r.entries.filter((e) => e.day === r.today);
-    const common = mostCommon(entries);
     const rate = r.students.length ? Math.round((r.entries.length / (r.students.length * Math.max(1, elapsed))) * 100) : 0;
     const streakIds = Object.keys(r.streaks);
 
@@ -288,8 +287,6 @@ export async function checkinTab(root, data) {
     }
 
     // 날씨별 개수 (숫자 타일)
-    const counts = Object.fromEntries(WEATHERS.map((w) => [w.key, 0]));
-    for (const e of entries) counts[e.weather] = (counts[e.weather] || 0) + 1;
 
     fill(body, 
       h('div', { class: 'row between mb' },
@@ -301,23 +298,19 @@ export async function checkinTab(root, data) {
         studentSel,
       ),
       r.klass.checkin_enabled ? null : h('div', { class: 'notice warn mb' }, '마음 날씨 체크인이 꺼져 있어요. 설정 탭에서 켤 수 있어요.'),
-      h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' } },
-        h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, '오늘 체크인'), h('span', { class: 'stat-val' }, `${todayRows.length}/${r.students.length}`)),
-        h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, '이번 달 참여율'), h('span', { class: 'stat-val' }, `${Math.min(100, rate)}%`)),
-        h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, who ? '자주 고른 날씨' : '가장 많은 날씨'), h('span', { class: 'stat-val row nowrap', style: { gap: '8px' } }, common ? [weatherIcon(common, 36), weatherBadge(common).label] : '-')),
-        h('div', { class: 'card stat' }, h('span', { class: 'stat-label' }, '관심이 필요한 친구'), h('span', { class: 'stat-val' }, `${streakIds.length}명`), h('span', { class: 'tiny faint' }, '최근 2일 이상 비·천둥')),
+      h('div', { class: 'summary-line' },
+        h('span', null, '오늘 ', h('b', null, `${todayRows.length}/${r.students.length}명`)),
+        h('span', null, '이번 달 ', h('b', null, `${Math.min(100, rate)}%`)),
+        streakIds.length ? h('span', { class: 'warn-text' }, '관심 필요 ', h('b', null, `${streakIds.length}명`)) : null,
       ),
       h('div', { class: 'grid two mt' },
         h('div', { class: 'card' }, h('h3', null, '마음 날씨 달력'), cal),
         h('div', { class: 'card' },
           h('h3', null, who ? `${byId.get(Number(who))?.name}의 마음 변화` : '우리 반 평균 마음 변화'),
           trendChart(points, days, '날짜별 마음 날씨'),
-          h('div', { class: 'grid mt', style: { gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px' } },
-            WEATHERS.map((w) => h('div', { class: 'center', title: `${w.label} ${counts[w.key]}회` }, weatherIcon(w.key, 32), h('div', { class: 'tiny muted' }, w.label), h('b', { class: 'num' }, counts[w.key]))),
-          ),
         ),
       ),
-      h('div', { class: 'section-title' }, h('h2', null, '오늘의 마음'), h('span', { class: 'small faint' }, `${todayRows.length}명 기록`)),
+      h('div', { class: 'section-title' }, h('h2', null, '오늘의 마음')),
       todayRows.length ? checkinTable(todayRows, byId, r.streaks) : h('p', { class: 'muted' }, '오늘은 아직 체크인한 학생이 없어요.'),
     );
   }

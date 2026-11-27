@@ -12,7 +12,7 @@ delete process.env.ANTHROPIC_API_KEY;
 delete process.env.ANTHROPIC_AUTH_TOKEN;
 
 const { openDb, closeDb } = await import('../server/db.js');
-const { createApp, ensureAdmin } = await import('../server/index.js');
+const { createApp, ensureAdmin, ensureInitialTeachers } = await import('../server/index.js');
 
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 let server;
@@ -155,6 +155,45 @@ test('학생 로그인: 참여 코드 → 동물 → 과일', async () => {
   // 학생은 교사 API를 쓸 수 없다
   r = await s.get(`/classes/${ctx.klass.id}`);
   assert.equal(r.status, 401);
+});
+
+test('그림 비밀번호는 학급 공통: 모두 같고, 학급에서 바꾸면 모두 바뀐다', async () => {
+  const t = ctx.teacher;
+  let r = await t.get(`/classes/${ctx.klass.id}`);
+  const { klass, students } = r.data;
+  assert.ok(klass.login_animal && klass.login_fruit);
+  assert.ok(students.every((x) => x.animal === klass.login_animal && x.fruit === klass.login_fruit));
+  assert.equal(new Set(students.map((x) => x.access_code)).size, students.length, '참여 코드는 학생마다 다르다');
+  // 학생 한 명만 바꾸는 것은 막는다
+  r = await t.patch(`/students/${students[0].id}`, { animal: 'cat' });
+  assert.equal(r.status, 400);
+  // 학급에서 직접 고르기
+  const animal = klass.login_animal === 'panda' ? 'pig' : 'panda';
+  r = await t.patch(`/classes/${ctx.klass.id}`, { loginAnimal: animal, loginFruit: 'peach' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.login_animal, animal);
+  r = await t.get(`/classes/${ctx.klass.id}`);
+  assert.ok(r.data.students.every((x) => x.animal === animal && x.fruit === 'peach'));
+  const kidClient = client();
+  r = await kidClient.post('/auth/student/login', { code: students[1].access_code, animal, fruit: 'peach' });
+  assert.equal(r.status, 200);
+  // 새로 뽑기는 이전과 다른 조합
+  r = await t.patch(`/classes/${ctx.klass.id}`, { resetLoginPicture: true });
+  assert.ok(r.data.login_animal !== animal || r.data.login_fruit !== 'peach');
+  r = await t.patch(`/classes/${ctx.klass.id}`, { loginAnimal: 'zebra' });
+  assert.equal(r.status, 400);
+  // 새로 등록한 학생도 학급 그림을 따른다
+  const cur = (await t.get(`/classes/${ctx.klass.id}`)).data.klass;
+  r = await t.post(`/classes/${ctx.klass.id}/students`, { names: '99 새친구' });
+  assert.equal(r.data[0].animal, cur.login_animal);
+  assert.equal(r.data[0].fruit, cur.login_fruit);
+  // 참여 코드 재발급은 코드만 바뀐다
+  const before = r.data[0];
+  r = await t.patch(`/students/${before.id}`, { resetLogin: true });
+  assert.notEqual(r.data.access_code, before.access_code);
+  assert.equal(r.data.animal, cur.login_animal);
+  await t.del(`/students/${before.id}`);
+  ctx.students = (await t.get(`/classes/${ctx.klass.id}`)).data.students;
 });
 
 test('그림 비밀번호를 계속 틀리면 잠시 잠긴다', async () => {
@@ -414,4 +453,63 @@ test('로그인 정보 재발급 시 기존 학생 세션 종료', async () => {
   assert.notEqual(r.data.access_code, kid.access_code);
   const me = await ctx.kid.get('/auth/me');
   assert.equal(me.data.kind, null);
+});
+
+test('선생님은 이메일만으로 로그인, 관리자는 비밀번호 필요', async () => {
+  const t = client();
+  let r = await t.post('/auth/register', { email: 'easy@test.kr', name: '이메일 선생님', schoolCode: ctx.schoolCode });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.status, 'active');
+  const t2 = client();
+  r = await t2.post('/auth/login', { email: ' EASY@test.kr ' });
+  assert.equal(r.status, 200);
+  r = await t2.get('/auth/me');
+  assert.equal(r.data.user.email, 'easy@test.kr');
+  // 없는 이메일
+  r = await client().post('/auth/login', { email: 'nobody@test.kr' });
+  assert.equal(r.status, 401);
+  // 승인 대기 선생님은 이메일만으로도 못 들어온다
+  await client().post('/auth/register', { email: 'wait@test.kr', name: '대기', schoolName: '어딘가' });
+  r = await client().post('/auth/login', { email: 'wait@test.kr' });
+  assert.equal(r.status, 403);
+  // 관리자는 비밀번호가 필요하다
+  r = await client().post('/auth/login', { email: 'root@test.kr' });
+  assert.equal(r.status, 401);
+  assert.equal(r.data.needPassword, true);
+  // 설정으로 끄면 비밀번호를 다시 받는다
+  process.env.TEACHER_EMAIL_LOGIN = 'false';
+  r = await client().post('/auth/login', { email: 'easy@test.kr' });
+  assert.equal(r.status, 401);
+  r = await client().get('/auth/config');
+  assert.equal(r.data.teacherEmailOnly, false);
+  delete process.env.TEACHER_EMAIL_LOGIN;
+});
+
+test('처음 실행 시 범어초 최규민 선생님 계정이 만들어지고, 관리자가 이메일을 바꿀 수 있다', async () => {
+  ensureInitialTeachers();
+  ensureInitialTeachers(); // 두 번 실행해도 하나만
+  const admin = ctx.admin;
+  let r = await admin.get('/admin/teachers');
+  const list = r.data.filter((u) => u.name === '최규민');
+  assert.equal(list.length, 1);
+  assert.equal(list[0].school_name, '범어초등학교');
+  assert.equal(list[0].status, 'active');
+  r = await admin.get('/admin/schools');
+  assert.ok(r.data.some((x) => x.name === '범어초등학교' && /^[A-Z0-9]{8}$/.test(x.invite_code)));
+  const k = client();
+  r = await k.post('/auth/login', { email: 'kyumin@miart.school' });
+  assert.equal(r.status, 200);
+  // 관리자가 이메일을 바꾸면 예전 이메일과 예전 로그인은 끊긴다
+  r = await admin.patch(`/admin/teachers/${list[0].id}`, { email: 'kyumin.choi@beomeo.kr' });
+  assert.equal(r.status, 200);
+  r = await k.get('/auth/me');
+  assert.equal(r.data.kind, null);
+  r = await client().post('/auth/login', { email: 'kyumin@miart.school' });
+  assert.equal(r.status, 401);
+  r = await client().post('/auth/login', { email: 'kyumin.choi@beomeo.kr' });
+  assert.equal(r.status, 200);
+  r = await admin.patch(`/admin/teachers/${list[0].id}`, { email: 'easy@test.kr' });
+  assert.equal(r.status, 409);
+  // 빈 값이면 만들지 않는다
+  ensureInitialTeachers('');
 });

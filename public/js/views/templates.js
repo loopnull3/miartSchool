@@ -1,10 +1,10 @@
 // 도안 만들기: 기본 도안 · 사진으로 만들기 · AI로 만들기 · 내 도안 / 과제용 도안 선택기
 import { api } from '../api.js';
 import { h, clear, fill, toast, toastError, modal, confirmDialog, emptyState, loading, debounce } from '../ui.js';
-import { go, shell, session } from '../app.js';
+import { go, shell } from '../app.js';
 import { BUILTIN_TEMPLATES, svgDataUrl, svgToPng, canvasThumb } from '../templates.js';
 import { photoToLineArt, fileToImage } from '../photo-sketch.js';
-import { appIcon, glyph } from '../icons.js';
+import { glyph } from '../icons.js';
 
 const TABS = [
   ['builtin', '기본 도안', 'templates'],
@@ -21,8 +21,7 @@ export async function templatesPage({ params }) {
   const view = shell(
     h('div', null,
       h('h1', null, '도안 만들기'),
-      h('p', { class: 'muted' }, session.me.kind === 'student' ? '마음에 드는 도안을 골라 색칠하거나, 사진·AI로 나만의 도안을 만들어요.' : '기본 도안을 쓰거나, 사진·AI로 만든 도안을 저장해 과제에 활용하세요.'),
-      h('nav', { class: 'tabs' }, TABS.map(([k, label, ic]) => h('a', { href: `#/templates/${k}`, class: k === tab ? 'active' : '', style: { display: 'inline-flex', alignItems: 'center', gap: '8px' } }, appIcon(ic, 22), label))),
+      h('nav', { class: 'tabs' }, TABS.map(([k, label]) => h('a', { href: `#/templates/${k}`, class: k === tab ? 'active' : '' }, label))),
       content,
     ),
     { active: 'templates' },

@@ -33,16 +33,17 @@ const teacherId = upsertUser({ role: 'teacher', email: 'teacher@miart.school', n
 
 let klass = one('SELECT * FROM classes WHERE teacher_id = ? AND name = ?', teacherId, '3학년 2반');
 if (!klass) {
-  run("INSERT INTO classes (teacher_id, name, grade, code) VALUES (?, '3학년 2반', '초등 3학년', ?)", teacherId, 'DEMO23');
+  // 그림 비밀번호는 학급 공통: 강아지 + 사과
+  run("INSERT INTO classes (teacher_id, name, grade, code, login_animal, login_fruit) VALUES (?, '3학년 2반', '초등 3학년', ?, 'dog', 'apple')", teacherId, 'DEMO23');
   klass = one('SELECT * FROM classes WHERE teacher_id = ? AND name = ?', teacherId, '3학년 2반');
   const kids = [
-    ['김하늘', 'tone0', 'dog', 'apple'], ['이바다', 'tone1', 'cat', 'banana'], ['박구름', 'tone2', 'rabbit', 'grape'], ['최별님', 'tone3', 'pig', 'orange'],
-    ['정나래', 'tone4', 'elephant', 'peach'], ['한여름', 'tone5', 'panda', 'watermelon'], ['오솔길', 'tone6', 'dog', 'grape'], ['윤보라', 'tone7', 'cat', 'peach'],
+    ['김하늘', 'tone0'], ['이바다', 'tone1'], ['박구름', 'tone2'], ['최별님', 'tone3'],
+    ['정나래', 'tone4'], ['한여름', 'tone5'], ['오솔길', 'tone6'], ['윤보라', 'tone7'],
   ];
-  kids.forEach(([name, avatar, animal, fruit], i) =>
+  kids.forEach(([name, avatar], i) =>
     run(
       'INSERT INTO students (class_id, name, number, pin, avatar, access_code, animal, fruit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      klass.id, name, i + 1, '0000', avatar, `MIA${101 + i}`, animal, fruit,
+      klass.id, name, i + 1, '0000', avatar, `MIA${101 + i}`, 'dog', 'apple',
     ),
   );
   const now = Date.now();
@@ -99,9 +100,10 @@ console.log(`
 미아트스쿨 데모 데이터 준비 완료
 ────────────────────────────────
 관리자   admin@miart.school / admin1234
-선생님   teacher@miart.school / teacher1234
+선생님   teacher@miart.school (이메일만 입력하면 로그인)
 학교 인증 코드  ${school.invite_code}  (이 코드로 가입한 선생님은 바로 승인)
 학생 로그인 (학생 로그인 › 참여 코드 → 동물 → 과일)
-  김하늘 MIA101 강아지·사과   이바다 MIA102 고양이·바나나   박구름 MIA103 토끼·포도   최별님 MIA104 돼지·오렌지
-  정나래 MIA105 코끼리·복숭아 한여름 MIA106 판다·수박     오솔길 MIA107 강아지·포도   윤보라 MIA108 고양이·복숭아
+  3학년 2반 그림 비밀번호: 강아지 → 사과 (학급 모두 같음)
+  김하늘 MIA101  이바다 MIA102  박구름 MIA103  최별님 MIA104
+  정나래 MIA105  한여름 MIA106  오솔길 MIA107  윤보라 MIA108
 `);
