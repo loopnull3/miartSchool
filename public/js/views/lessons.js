@@ -94,7 +94,7 @@ export async function libraryPage({ query }) {
   const [lessons, my] = await Promise.all([api.get('/lessons'), api.get('/my-lessons')]);
   const f = { grade: '', technique: '', season: '', q: '' };
   const grid = h('div', { class: 'grid' });
-  const chipsBox = h('div', { class: 'stack', style: { gap: '10px', marginBottom: '22px' } });
+  const chipsBox = h('div', { class: 'stack', style: { gap: '10px' } });
   const uniq = (k) => [...new Set(lessons.map((l) => l[k]).filter(Boolean))];
   const chipRow = (key, label, values, fmt = (v) => v) =>
     h('div', { class: 'row', style: { gap: '8px' } }, h('span', { class: 'small faint', style: { width: '40px' } }, label),
@@ -125,8 +125,8 @@ export async function libraryPage({ query }) {
   }
   return shell(
     h('div', null,
-      h('div', { class: 'page-head' }, h('div', null, h('h1', null, '수업 자료'), h('p', { class: 'sub' }, '수업안을 골라 내 수업으로 저장하고, 학급에서 바로 시작하세요.')), h('div', { class: 'row' }, search, tabs('lib', my.length))),
-      chipsBox,
+      h('div', { class: 'page-head' }, h('div', null, h('h1', null, '수업 자료'), h('p', { class: 'sub' }, '수업안을 골라 내 수업으로 저장하고, 학급에서 바로 시작하세요.')), tabs('lib', my.length)),
+      h('div', { class: 'toolbar-row', style: { alignItems: 'flex-start' } }, chipsBox, h('div', { class: 'search' }, search)),
       grid,
     ),
     { active: 'lessons' },

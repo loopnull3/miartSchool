@@ -286,8 +286,11 @@ test('과제 기간: 시작 전 과제는 학생에게 보이지 않고, 마감 
   r = await ctx.teacher.post(`/classes/${ctx.klass.id}/assignments`, { title: '잘못된 기간', startAt: future, endAt: past });
   assert.equal(r.status, 400);
   r = await ctx.friend.get('/student/assignments');
-  const titles = r.data.map((g) => g.title);
-  assert.ok(!titles.includes('내일 과제'));
+  const tomorrow = r.data.find((g) => g.title === '내일 과제');
+  assert.equal(tomorrow.not_started, true);
+  r = await ctx.friend.get(`/student/assignments/${tomorrow.id}`);
+  assert.equal(r.status, 403);
+  r = await ctx.friend.get('/student/assignments');
   assert.ok(r.data.find((g) => g.title === '지난 과제').closed);
   r = await ctx.friend.get('/student/home');
   assert.ok(!r.data.assignments.some((g) => g.title === '지난 과제'));

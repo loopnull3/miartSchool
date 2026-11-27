@@ -111,6 +111,7 @@ async function render() {
       /* ignore */
     }
   }
+  document.querySelector('.profile-pop')?.remove();
   const raw = location.hash.replace(/^#/, '') || '/';
   // 랜딩 페이지 안의 섹션 이동 (#features 등)
   if (!raw.startsWith('/')) {
@@ -164,35 +165,73 @@ export async function logout() {
   go('/');
 }
 
-// 공통 상단바 (Apple 스타일 유리 막대)
+// 프로필 메뉴 (사이드바 아래 아바타)
+function profileMenu(anchor) {
+  const me = session.me;
+  document.querySelector('.profile-pop')?.remove();
+  const close = () => {
+    pop.remove();
+    document.removeEventListener('pointerdown', outside, true);
+  };
+  const outside = (e) => {
+    if (!pop.contains(e.target) && !anchor.contains(e.target)) close();
+  };
+  const items =
+    me.kind === 'user'
+      ? [
+          h('div', { class: 'pp-head' }, h('b', null, `${me.user.name} 선생님`), h('span', null, me.user.school_name || me.user.email)),
+          h('a', { href: '#/t/account', onclick: close }, '내 계정'),
+          h('a', { href: '#/try/watercolor', onclick: close }, '드로잉 체험'),
+        ]
+      : [
+          h('div', { class: 'pp-head' }, h('span', { class: 'avatar' }, me.student.avatar), h('b', null, me.student.name), h('span', null, me.klass.name)),
+          me.klass.checkin_enabled ? h('a', { href: '#/s/checkin', onclick: close }, '내 마음 날씨') : null,
+        ];
+  const pop = h('div', { class: 'profile-pop', role: 'menu' }, items, h('button', { class: 'pp-logout', onclick: () => { close(); logout(); } }, me.kind === 'user' ? '로그아웃' : '나가기'));
+  document.body.append(pop);
+  const r = anchor.getBoundingClientRect();
+  if (window.matchMedia('(max-width: 760px)').matches) {
+    pop.style.right = '12px';
+    pop.style.bottom = `${window.innerHeight - r.top + 10}px`;
+  } else {
+    pop.style.left = `${r.right + 12}px`;
+    pop.style.bottom = `${Math.max(12, window.innerHeight - r.bottom)}px`;
+  }
+  setTimeout(() => document.addEventListener('pointerdown', outside, true), 0);
+}
+
+// 로그인한 화면: 왼쪽 사이드바 + 둥근 흰 패널 (휴대폰에서는 아래 탭 막대)
+// 로그인 전 화면: 유리 상단바
 export function shell(content, { active = '', wide = 'page' } = {}) {
   const me = session.me;
-  const nav = h('nav', { class: 'nav' });
-  const link = (href, label, key) => nav.append(h('a', { href: `#${href}`, class: active === key ? 'active' : '' }, label));
-  let who = null;
-  if (me.kind === 'user') {
-    if (me.user.role === 'admin') link('/admin', '관리', 'admin');
-    link('/t', '내 학급', 'classes');
-    link('/t/lessons', '수업 자료', 'lessons');
-    link('/boards', '갤러리보드', 'boards');
-    link('/templates', '도안 만들기', 'templates');
-    who = h('div', { class: 'who' }, h('a', { href: '#/t/account', class: 'hide-sm', style: { color: 'var(--ink-2)' } }, `${me.user.name} 선생님`), h('button', { class: 'btn sm ghost', onclick: logout }, '로그아웃'));
-  } else if (me.kind === 'student') {
-    link('/s', '대시보드', 'home');
-    link('/s/assignments', '내 과제', 'assignments');
-    link('/s/works', '내 작품', 'works');
-    if (me.klass.gallery_enabled) link('/boards', '갤러리보드', 'boards');
-    link('/templates', '도안', 'templates');
-    who = h('div', { class: 'who' }, h('span', { class: 'avatar sm' }, me.student.avatar), h('span', { class: 'hide-sm' }, me.student.name), h('button', { class: 'btn sm ghost', onclick: logout }, '나가기'));
-  } else {
-    who = h('div', { class: 'who' }, h('a', { class: 'btn sm outline', href: '#/student/login' }, '학생 로그인'), h('a', { class: 'btn sm primary', href: '#/login' }, '교사 로그인'));
+  if (!me.kind) {
+    const who = h('div', { class: 'who' }, h('a', { class: 'btn sm outline', href: '#/student/login' }, '학생 로그인'), h('a', { class: 'btn sm primary', href: '#/login' }, '교사 로그인'));
+    const bar = h('header', { class: 'topbar no-print' },
+      h('div', { class: 'topbar-inner' }, h('a', { class: 'brand', href: '#/' }, h('img', { src: '/icons/icon.svg', alt: '' }), h('span', null, '미아트스쿨')), h('div', { class: 'spacer' }), who));
+    return h('div', null, bar, h('main', { class: wide }, content));
   }
-  const bar = h(
-    'header',
-    { class: 'topbar no-print' },
-    h('div', { class: 'topbar-inner' }, h('a', { class: 'brand', href: `#${homeFor(me)}` }, h('img', { src: '/icons/icon.svg', alt: '' }), h('span', null, '미아트스쿨')), nav, h('div', { class: 'spacer' }), who),
+  const items = [];
+  const item = (href, emoji, label, key) => items.push(h('a', { class: `rail-item ${active === key ? 'active' : ''}`, href: `#${href}`, 'aria-current': active === key ? 'page' : null }, h('span', { class: 'ri', 'aria-hidden': 'true' }, emoji), h('span', { class: 'rl' }, label)));
+  if (me.kind === 'user') {
+    item('/t', '🏫', '학급', 'classes');
+    item('/t/lessons', '📚', '수업 자료', 'lessons');
+    item('/boards', '🖼️', '갤러리', 'boards');
+    item('/templates', '🎨', '도안', 'templates');
+    if (me.user.role === 'admin') item('/admin', '⚙️', '관리', 'admin');
+  } else {
+    item('/s', '🏠', '홈', 'home');
+    item('/s/assignments', '✏️', '과제', 'assignments');
+    item('/s/works', '🗂️', '작품', 'works');
+    if (me.klass.gallery_enabled) item('/boards', '🖼️', '갤러리', 'boards');
+    item('/templates', '🖍️', '도안', 'templates');
+  }
+  const avatar = h('button', { class: 'rail-avatar', 'aria-label': '프로필 메뉴', onclick: (e) => profileMenu(e.currentTarget) }, me.kind === 'user' ? (me.user.name || '선')[0] : me.student.avatar);
+  const rail = h('nav', { class: 'rail no-print', 'aria-label': '메뉴' },
+    h('a', { class: 'rail-logo', href: `#${homeFor(me)}`, 'aria-label': '미아트스쿨 홈' }, h('img', { src: '/icons/icon.svg', alt: '' })),
+    items,
+    h('div', { class: 'rail-bottom' }, avatar),
   );
-  return h('div', null, bar, h('main', { class: wide }, content));
+  return h('div', { class: 'app-shell' }, rail, h('main', { class: 'main-panel' }, h('div', { class: wide === '' ? 'bare' : wide }, content)));
 }
 
 window.addEventListener('hashchange', render);

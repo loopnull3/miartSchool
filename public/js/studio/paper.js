@@ -83,7 +83,7 @@ export function watercolorHeight() {
 }
 
 // 캔버스 평직 — 실이 위로 올라온 정도 0..1 (0 = 실 사이 틈)
-export const WEAVE_CELL = 6;
+export const WEAVE_CELL = 4;
 export function canvasWeave() {
   return once('h:canvas', () => {
     const c = WEAVE_CELL;
@@ -92,6 +92,7 @@ export function canvasWeave() {
     const colVar = Array.from({ length: n }, () => 0.85 + rnd() * 0.3);
     const rowVar = Array.from({ length: n }, () => 0.85 + rnd() * 0.3);
     const slub = tileNoise(TILE, 24, rnd);
+    const fine = tileNoise(TILE, 2, rnd);
     const out = new Float32Array(TILE * TILE);
     for (let y = 0; y < TILE; y++) {
       const cy = (y / c) | 0;
@@ -103,7 +104,7 @@ export function canvasWeave() {
         let p;
         if (warpTop) p = Math.sin(Math.PI * fx) * (0.82 + 0.18 * Math.sin(Math.PI * fy)) * colVar[cx];
         else p = Math.sin(Math.PI * fy) * (0.82 + 0.18 * Math.sin(Math.PI * fx)) * rowVar[cy];
-        p *= 0.9 + slub[y * TILE + x] * 0.2;
+        p *= 0.82 + slub[y * TILE + x] * 0.22 + fine[y * TILE + x] * 0.12;
         out[y * TILE + x] = Math.min(1, Math.max(0, p));
       }
     }
@@ -180,8 +181,8 @@ export function paperTile(kind) {
       const wv = canvasWeave();
       for (let i = 0; i < TILE * TILE; i++) {
         const p = wv[i];
-        const f = 0.8 + 0.22 * p;
-        const n = (mottle[i] - 0.5) * 6 + (rnd() - 0.5) * 4;
+        const f = 0.9 + 0.11 * p;
+        const n = (mottle[i] - 0.5) * 7 + (mid[i] - 0.5) * 4 + (rnd() - 0.5) * 4;
         d[i * 4] = br * f + n;
         d[i * 4 + 1] = bg * f + n;
         d[i * 4 + 2] = bb * f + n - 2 * (1 - p);

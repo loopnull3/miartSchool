@@ -7,12 +7,12 @@ export const BRUSHES = {
   crayon: { label: '크레용', size: 18, min: 6, max: 70, opacity: 0.96, dab: 'hard', texture: 'grain-heavy', spacing: 0.12, pressureSize: 0.35, smoothing: 0.3 },
   pen: { label: '사인펜', size: 8, min: 2, max: 40, opacity: 1, dab: 'hard', spacing: 0.1, pressureSize: 0.45, smoothing: 0.45 },
   marker: { label: '마커', size: 24, min: 6, max: 90, opacity: 0.55, dab: 'hard', spacing: 0.08, pressureSize: 0.15, smoothing: 0.4, blend: 'multiply' },
-  watercolor: { label: '수채화 붓', short: '수채 붓', size: 44, min: 10, max: 140, opacity: 0.5, dab: 'soft', texture: 'paper', spacing: 0.07, pressureSize: 0.5, smoothing: 0.4, blend: 'multiply', jitter: 0.12, dabAlpha: 0.22 },
-  watercolorWide: { label: '넓은 수채화 붓', short: '넓은 붓', size: 100, min: 30, max: 260, opacity: 0.42, dab: 'flat', texture: 'paper-soft', spacing: 0.035, pressureSize: 0.3, smoothing: 0.55, blend: 'multiply', jitter: 0.04, dabAlpha: 0.075, flat: 0.34 },
+  watercolor: { label: '수채화 붓', short: '수채 붓', size: 44, min: 10, max: 140, opacity: 0.55, dab: 'soft', texture: 'paper', spacing: 0.07, pressureSize: 0.5, smoothing: 0.4, blend: 'multiply', jitter: 0.1, dabAlpha: 0.2, wetEdge: 1 },
+  watercolorWide: { label: '넓은 수채화 붓', short: '넓은 붓', size: 100, min: 30, max: 260, opacity: 0.5, dab: 'flat', texture: 'paper-soft', spacing: 0.035, pressureSize: 0.3, smoothing: 0.55, blend: 'multiply', jitter: 0.04, dabAlpha: 0.13, flat: 0.3, wetEdge: 0.8 },
   flower: { label: '꽃 브러시', short: '꽃 붓', size: 42, min: 16, max: 120, opacity: 1, dab: 'flower', spacing: 0.82, pressureSize: 0.35, smoothing: 0.55 },
   spray: { label: '스프레이', size: 46, min: 10, max: 160, opacity: 1, dab: 'spray', spacing: 0.25, pressureSize: 0.3, smoothing: 0.2 },
   rainbow: { label: '무지개펜', size: 14, min: 4, max: 60, opacity: 1, dab: 'hard', spacing: 0.08, pressureSize: 0.35, smoothing: 0.4, rainbow: true },
-  oil: { label: '유화 붓', size: 18, min: 4, max: 90, opacity: 1, dab: 'oil', texture: 'canvas', spacing: 0.04, pressureSize: 0.35, smoothing: 0.45, mix: true },
+  oil: { label: '유화 붓', size: 22, min: 4, max: 100, opacity: 1, dab: 'oil', texture: 'canvas', spacing: 0.035, pressureSize: 0.35, smoothing: 0.45, mix: true },
   smudge: { label: '스머지', size: 40, min: 10, max: 140, opacity: 1, dab: 'smudge', direct: true, noColor: true, spacing: 0.1, pressureSize: 0, smoothing: 0.45, strength: 0.65 },
   rag: { label: '헝겊', size: 80, min: 20, max: 240, opacity: 1, dab: 'rag', direct: true, erase: true, noColor: true, spacing: 0.09, pressureSize: 0.25, smoothing: 0.4, strength: 0.45 },
   eraser: { label: '지우개', size: 32, min: 4, max: 160, opacity: 1, dab: 'hard', direct: true, erase: true, noColor: true, spacing: 0.08, pressureSize: 0.3, smoothing: 0.3 },
@@ -20,12 +20,12 @@ export const BRUSHES = {
 
 // 유화 붓 호수 (1호~6호)
 export const OIL_PRESETS = [
-  { label: '1호', size: 6 },
-  { label: '2호', size: 11 },
-  { label: '3호', size: 18 },
-  { label: '4호', size: 28 },
-  { label: '5호', size: 42 },
-  { label: '6호', size: 64 },
+  { label: '1호', size: 8 },
+  { label: '2호', size: 14 },
+  { label: '3호', size: 22 },
+  { label: '4호', size: 32 },
+  { label: '5호', size: 46 },
+  { label: '6호', size: 66 },
 ];
 
 function makeCanvas(w, h) {
@@ -57,15 +57,15 @@ export function textureCanvas(kind) {
       const wv = canvasWeave();
       for (let i = 0; i < TILE * TILE; i++) {
         const gap = 1 - wv[i];
-        img.data[i * 4 + 3] = Math.round(Math.min(1, Math.pow(gap, 1.6) * 0.42 + (low[i] - 0.5) * 0.06) * 255);
+        img.data[i * 4 + 3] = Math.round(Math.max(0, Math.min(1, Math.pow(gap, 2) * 0.22 + (low[i] - 0.5) * 0.05)) * 255);
       }
     } else {
       const hm = watercolorHeight();
       const soft = kind === 'paper-soft';
       for (let i = 0; i < TILE * TILE; i++) {
         // 높은 곳(종이 결의 언덕)은 물감이 덜 묻고, 넓은 얼룩으로 번짐 느낌
-        const peak = smoothstep(0.45, 0.95, hm[i]) * (soft ? 0.38 : 0.55);
-        const wash = Math.max(0, low[i] * 0.7 + blot[i] * 0.3 - 0.42) * (soft ? 0.7 : 0.55);
+        const peak = smoothstep(0.5, 0.95, hm[i]) * (soft ? 0.32 : 0.42);
+        const wash = soft ? 0 : Math.max(0, low[i] * 0.7 + blot[i] * 0.3 - 0.5) * 0.45;
         img.data[i * 4 + 3] = Math.round(Math.min(1, peak + wash) * 255);
       }
     }
@@ -136,36 +136,70 @@ function makeSoftTip(color, stops) {
   ctx.fillRect(0, 0, s, s);
   return c;
 }
-const SOFT_STOPS = [[0, 1], [0.55, 0.75], [0.85, 0.25], [1, 0]];
-const WASH_STOPS = [[0, 0.9], [0.35, 0.72], [0.7, 0.3], [1, 0]];
+const SOFT_STOPS = [[0, 1], [0.6, 0.92], [0.82, 0.6], [0.94, 0.16], [1, 0]];
+
+// 넓은 수채화 붓: 폭 방향(y)은 거의 고르게, 양 끝과 진행 방향(x)만 부드럽게 사라지는 납작한 팁
+let flatMask = null;
+function makeFlatTip(color) {
+  const S = 64;
+  if (!flatMask) {
+    flatMask = makeCanvas(S, S);
+    const ctx = flatMask.getContext('2d');
+    const img = ctx.createImageData(S, S);
+    const rnd = mulberry32(99);
+    const hair = Array.from({ length: S }, () => 0.86 + rnd() * 0.14);
+    for (let y = 0; y < S; y++) {
+      const v = Math.abs((y / (S - 1)) * 2 - 1);
+      const across = (1 - smoothstep(0.7, 1, v)) * hair[y];
+      for (let x = 0; x < S; x++) {
+        const u = Math.abs((x / (S - 1)) * 2 - 1);
+        const along = 1 - smoothstep(0.25, 1, u);
+        const o = (y * S + x) * 4;
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = 255;
+        img.data[o + 3] = Math.round(across * along * 255);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  const c = makeCanvas(S, S);
+  const ctx = c.getContext('2d');
+  ctx.drawImage(flatMask, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, S, S);
+  return c;
+}
 
 // 유화 붓: 털 결 마스크(흰색+알파)와 명암(흰/검 + 알파)을 따로 만들어 색을 입힌다
+// 팁의 x축 = 붓이 나아가는 방향, y축 = 붓 폭. 털 결은 x축을 따라 길게 이어진다.
 const OIL_S = 128;
 function makeOilTipParts(seed) {
   const S = OIL_S;
   const rnd = mulberry32(seed);
-  const n = 30;
+  const n = 46;
   const bristles = Array.from({ length: n }, () => ({
-    v: rnd() * 2 - 1,
-    w: 0.025 + rnd() * 0.06,
-    dens: 0.45 + rnd() * 0.55,
+    v: rnd() * 2.2 - 1.1,
+    w: 0.012 + rnd() * 0.035,
+    dry: rnd() < 0.22 ? 0.35 + rnd() * 0.4 : 1,
     shade: (rnd() - 0.5) * 2,
   }));
-  const density = new Float32Array(S);
+  const dens = new Float32Array(S);
   const shadeRow = new Float32Array(S);
   for (let y = 0; y < S; y++) {
     const v = (y / (S - 1)) * 2 - 1;
-    let d = 0.42;
+    let dry = 1;
     let sh = 0;
+    let wsum = 0;
     for (const b of bristles) {
       const k = Math.exp(-((v - b.v) ** 2) / (2 * b.w * b.w));
-      d += k * b.dens * 0.6;
       sh += k * b.shade;
+      wsum += k;
+      if (b.dry < 1) dry = Math.min(dry, 1 - k * (1 - b.dry));
     }
-    // 가장자리 털은 성기게(마른 붓 느낌)
-    d *= 1 - smoothstep(0.62, 1, Math.abs(v)) * 0.55;
-    density[y] = Math.min(1, d);
-    shadeRow[y] = Math.max(-1, Math.min(1, sh * 0.5));
+    // 붓 가장자리일수록 마른 털이 더 드러난다
+    const edgeDry = smoothstep(0.55, 1, Math.abs(v));
+    dens[y] = Math.max(0, Math.min(1, (0.97 - edgeDry * 0.35) * (1 - (1 - dry) * (0.4 + edgeDry * 0.6))));
+    shadeRow[y] = wsum > 0.05 ? Math.max(-1, Math.min(1, sh / Math.max(1, wsum))) : 0;
   }
   const mask = makeCanvas(S, S);
   const shade = makeCanvas(S, S);
@@ -176,19 +210,17 @@ function makeOilTipParts(seed) {
     for (let x = 0; x < S; x++) {
       const u = (x / (S - 1)) * 2 - 1;
       // 필버트 모양: 진행 방향(u)으로 얇고 폭(v)이 넓은 둥근 사각형
-      const e = Math.pow(Math.abs(u) / 0.5, 2.4) + Math.pow(Math.abs(v), 3);
-      const edge = 1 - smoothstep(0.78, 1, e);
+      const e = Math.pow(Math.abs(u) / 0.42, 2.6) + Math.pow(Math.abs(v), 3.2);
+      const edge = 1 - smoothstep(0.8, 1, e);
       if (edge <= 0) continue;
       const o = (y * S + x) * 4;
-      const grain = 0.86 + rnd() * 0.14;
       mi.data[o] = mi.data[o + 1] = mi.data[o + 2] = 255;
-      mi.data[o + 3] = Math.round(edge * density[y] * grain * 255);
-      // 두꺼운 물감의 볼록한 능선: 한쪽은 밝게, 반대쪽은 어둡게
-      let s = shadeRow[y] * 0.55 + (smoothstep(0.15, 0.85, -v) * 0.35 - smoothstep(0.35, 1, v) * 0.32);
-      s += (rnd() - 0.5) * 0.12;
+      mi.data[o + 3] = Math.round(edge * dens[y] * (0.93 + rnd() * 0.07) * 255);
+      // 털 결마다 밝고 어두운 줄 + 아주 약한 결 반짝임
+      const s = shadeRow[y] * 0.9 + (rnd() - 0.5) * 0.1;
       const c = s > 0 ? 255 : 0;
       si.data[o] = si.data[o + 1] = si.data[o + 2] = c;
-      si.data[o + 3] = Math.round(Math.min(1, Math.abs(s)) * (s > 0 ? 0.42 : 0.36) * 255);
+      si.data[o + 3] = Math.round(Math.min(1, Math.abs(s)) * (s > 0 ? 0.3 : 0.26) * 255);
     }
   }
   mask.getContext('2d').putImageData(mi, 0, 0);
@@ -363,7 +395,7 @@ export class StrokeRenderer {
     this.layerCanvas = extra.layerCanvas || null;
     this.tip = null;
     if (brush.dab === 'soft') this.tip = makeSoftTip(color, SOFT_STOPS);
-    else if (brush.dab === 'flat') this.tip = makeSoftTip(color, WASH_STOPS);
+    else if (brush.dab === 'flat') this.tip = makeFlatTip(color);
     else if (brush.dab === 'oil') {
       this.oilParts = makeOilTipParts(this.seed);
       this.tip = makeCanvas(OIL_S, OIL_S);
@@ -617,6 +649,33 @@ export class StrokeRenderer {
   }
 }
 
+// 수채화가 마르면서 가장자리에 물감이 모이는 효과.
+// 획을 끝낼 때 '바뀐 사각형' 안에서만 한 번 계산한다 (그리는 동안에는 읽기 없음).
+export function wetEdge(canvas, r, size, amount = 1) {
+  if (!r || r.w < 2 || r.h < 2) return;
+  const ctx = canvas.getContext('2d');
+  const f = Math.max(3, Math.min(24, Math.round(size / 4)));
+  const half = makeCanvas(Math.max(1, Math.round(r.w / 2)), Math.max(1, Math.round(r.h / 2)));
+  half.getContext('2d').drawImage(canvas, r.x, r.y, r.w, r.h, 0, 0, half.width, half.height);
+  const small = makeCanvas(Math.max(1, Math.round(r.w / f)), Math.max(1, Math.round(r.h / f)));
+  small.getContext('2d').drawImage(half, 0, 0, small.width, small.height);
+  const big = makeCanvas(r.w, r.h);
+  const bctx = big.getContext('2d', { willReadFrequently: true });
+  bctx.drawImage(small, 0, 0, r.w, r.h);
+  const blur = bctx.getImageData(0, 0, r.w, r.h).data;
+  const img = ctx.getImageData(r.x, r.y, r.w, r.h);
+  const d = img.data;
+  const inner = 1 - 0.24 * amount;
+  const rim = 1.6 * amount;
+  for (let i = 3; i < d.length; i += 4) {
+    const a = d[i];
+    if (!a) continue;
+    const e = a - blur[i];
+    d[i] = a * inner + (e > 0 ? e * rim : 0);
+  }
+  ctx.putImageData(img, r.x, r.y);
+}
+
 // 패널에 보여 줄 붓 자국 미리보기
 export function renderBrushSample(canvas, brushKey, color, size, opacity, strength) {
   const brush = BRUSHES[brushKey];
@@ -654,7 +713,9 @@ export function renderBrushSample(canvas, brushKey, color, size, opacity, streng
     bctx.globalCompositeOperation = 'destination-out';
     bctx.fillStyle = bctx.createPattern(textureCanvas(brush.texture), 'repeat');
     bctx.fillRect(0, 0, w, h);
+    bctx.globalCompositeOperation = 'source-over';
   }
+  if (brush.wetEdge) wetEdge(buf, { x: 0, y: 0, w, h }, s, brush.wetEdge);
   ctx.globalAlpha = opacity;
   ctx.drawImage(buf, 0, 0);
   ctx.globalAlpha = 1;

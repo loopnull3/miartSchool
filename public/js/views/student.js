@@ -14,31 +14,9 @@ function period(g) {
   return `${fmtDate(g.created_at)} 시작`;
 }
 
-function assignmentStatus(g) {
-  if (g.submitted_id) return h('span', { class: 'badge ok' }, '제출 완료');
-  if (g.closed) return h('span', { class: 'badge' }, '마감');
-  if (g.draft_id) return h('span', { class: 'badge warn' }, '그리는 중');
-  return h('span', { class: 'badge primary dot' }, '새 과제');
-}
-
 function assignmentHref(g) {
   if (g.submitted_id && !g.draft_id) return `#/draw?artwork=${g.submitted_id}`;
   return g.draft_id ? `#/draw?artwork=${g.draft_id}` : `#/draw?assignment=${g.id}`;
-}
-
-function assignmentCard(g) {
-  const thumb = templateThumbSrc(g.template_ref);
-  return h('a', { class: 'tile', href: assignmentHref(g), style: { padding: '16px' } },
-    h('div', { class: 'row nowrap', style: { alignItems: 'flex-start' } },
-      h('div', { style: { width: '92px', height: '69px', borderRadius: '12px', background: 'var(--surface-2)', display: 'grid', placeItems: 'center', overflow: 'hidden', flex: 'none' } },
-        thumb ? h('img', { src: thumb, alt: '', style: { width: '100%', height: '100%', objectFit: 'contain', background: '#fff' } }) : h('span', { style: { fontSize: '32px' } }, g.technique === 'oil' ? '🖌️' : '💧')),
-      h('div', { class: 'grow' },
-        h('div', { class: 'row', style: { gap: '6px', marginBottom: '4px' } }, assignmentStatus(g), h('span', { class: 'badge' }, TECH[g.technique] || '수채화')),
-        h('div', { class: 'tile-title', style: { fontSize: '1.05rem' } }, g.title),
-        h('div', { class: 'tile-sub small' }, period(g)),
-      ),
-    ),
-  );
 }
 
 function newDrawingSheet() {
@@ -133,7 +111,7 @@ export async function dashboard() {
       banner,
       h('div', { class: 'mt' }, checkinBox),
       h('div', { class: 'section-title' }, h('h2', null, '진행 중인 과제'), h('a', { href: '#/s/assignments', class: 'chev' }, '전체 보기')),
-      doing.length ? h('div', { class: 'grid two' }, doing.slice(0, 4).map(assignmentCard)) : h('p', { class: 'muted' }, '지금은 해야 할 과제가 없어요.'),
+      doing.length ? h('div', { class: 'assign-grid' }, doing.slice(0, 3).map(assignCard)) : h('p', { class: 'muted' }, '지금은 해야 할 과제가 없어요.'),
       h('div', { class: 'section-title' }, h('h2', null, '바로 가기')),
       h('div', { class: 'grid three' },
         shortcuts.map(([c, e, t, sub, href, fn]) => h(href ? 'a' : 'button', { class: `tile ${c}`, href: href || undefined, onclick: fn || undefined }, h('div', { class: 'tile-emoji' }, e), h('div', { class: 'tile-title' }, t), h('div', { class: 'tile-sub' }, sub))),
@@ -145,25 +123,76 @@ export async function dashboard() {
   );
 }
 
+function statusOf(g) {
+  if (g.not_started) return ['before', '시작 전'];
+  if (g.submitted_id) return ['done', '제출 완료'];
+  if (g.closed) return ['closed', '마감'];
+  if (g.draft_id) return ['draft', '그리는 중'];
+  return ['doing', '진행 중'];
+}
+
+export function assignCard(g) {
+  const thumb = templateThumbSrc(g.template_ref);
+  const [cls, label] = statusOf(g);
+  const paperCls = g.paper && g.paper !== 'white' && g.paper !== 'watercolor' ? `paper-${g.paper}` : '';
+  return h('button', {
+    class: 'assign-card',
+    onclick: () => {
+      if (g.not_started) return toast(`아직 시작 전이에요. ${fmtDateTime(g.start_at)}에 열려요.`);
+      location.hash = assignmentHref(g).slice(1);
+    },
+  },
+    h('div', { class: 'assign-preview' },
+      h('div', { class: `assign-paper ${g.orientation === 'portrait' ? 'portrait' : ''} ${paperCls}` },
+        thumb ? h('img', { src: thumb, alt: '' }) : h('span', { class: 'ap-emoji' }, g.technique === 'oil' ? '🖌️' : '💧'),
+        h('span', { class: 'ap-title' }, g.title),
+      ),
+    ),
+    h('div', { class: 'assign-info' },
+      h('span', { class: `status-pill ${cls}` }, label),
+      h('div', { class: 'ai-title' }, g.title),
+      h('div', { class: 'ai-meta' }, h('span', null, TECH[g.technique] || '수채화'), h('span', null, '·'), h('span', null, period(g))),
+    ),
+  );
+}
+
 export async function assignments({ query }) {
   const list = await api.get('/student/assignments');
-  let filter = query.f || 'doing';
-  const grid = h('div', { class: 'grid two' });
-  const seg = h('div', { class: 'segmented' });
-  const groups = {
-    doing: list.filter((g) => !g.submitted_id && !g.closed),
-    done: list.filter((g) => g.submitted_id),
-    closed: list.filter((g) => !g.submitted_id && g.closed),
+  let tab = query.tab === 'closed' ? 'closed' : 'open';
+  let sort = 'due';
+  let q = '';
+  const grid = h('div', { class: 'assign-grid' });
+  const tabsEl = h('div', { class: 'text-tabs', role: 'tablist' });
+  const search = h('input', { class: 'input', type: 'search', placeholder: '과제명 검색', 'aria-label': '과제명 검색', oninput: () => { q = search.value.trim().toLowerCase(); renderGrid(); } });
+  const sortSel = h('select', { class: 'input', 'aria-label': '정렬', style: { width: 'auto' }, onchange: () => { sort = sortSel.value; renderGrid(); } },
+    h('option', { value: 'due' }, '임박순'), h('option', { value: 'new' }, '최신순'));
+  const isClosed = (g) => g.closed && !g.not_started;
+  const renderTabs = () => {
+    const n = (c) => list.filter((g) => (c ? isClosed(g) : !isClosed(g))).length;
+    fill(tabsEl,
+      h('button', { class: tab === 'open' ? 'on' : '', role: 'tab', 'aria-selected': String(tab === 'open'), onclick: () => { tab = 'open'; renderTabs(); renderGrid(); } }, h('span', { class: 'ti' }, '🎨'), `진행중 과제`, h('span', { class: 'badge' }, n(false))),
+      h('span', { class: 'sep' }),
+      h('button', { class: tab === 'closed' ? 'on' : '', role: 'tab', 'aria-selected': String(tab === 'closed'), onclick: () => { tab = 'closed'; renderTabs(); renderGrid(); } }, h('span', { class: 'ti' }, '🏞️'), '마감된 과제', h('span', { class: 'badge' }, n(true))),
+    );
   };
-  const render = () => {
-    fill(seg, ...[['doing', '진행 중'], ['done', '제출 완료'], ['closed', '마감']].map(([k, l]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; render(); } }, `${l} ${groups[k].length}`)));
+  const renderGrid = () => {
+    let items = list.filter((g) => (tab === 'closed' ? isClosed(g) : !isClosed(g))).filter((g) => !q || g.title.toLowerCase().includes(q));
+    const due = (g) => (g.end_at ? Date.parse(g.end_at) : Infinity);
+    items = items.sort(sort === 'due' ? (a, b) => (a.not_started - b.not_started) || due(a) - due(b) : (a, b) => (a.created_at < b.created_at ? 1 : -1));
     clear(grid);
-    const items = groups[filter];
-    if (!items.length) grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState(filter === 'doing' ? '🎉' : '📭', filter === 'doing' ? '해야 할 과제를 모두 끝냈어요!' : '아직 없어요')));
-    else items.forEach((g) => grid.append(assignmentCard(g)));
+    if (!items.length) grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState(tab === 'open' ? '🎉' : '📭', q ? '검색 결과가 없어요' : tab === 'open' ? '지금은 해야 할 과제가 없어요' : '마감된 과제가 없어요')));
+    items.forEach((g) => grid.append(assignCard(g)));
   };
-  render();
-  return shell(h('div', null, h('div', { class: 'page-head' }, h('h1', null, '내 과제'), seg), grid), { active: 'assignments' });
+  renderTabs();
+  renderGrid();
+  return shell(
+    h('div', null,
+      h('h1', { style: { marginBottom: '26px' } }, '과제'),
+      h('div', { class: 'toolbar-row' }, tabsEl, h('div', { class: 'row', style: { gap: '10px' } }, h('div', { class: 'search' }, search), sortSel)),
+      grid,
+    ),
+    { active: 'assignments' },
+  );
 }
 
 function workTile(a, onClick) {
@@ -214,12 +243,15 @@ export async function postToBoardSheet(artwork) {
 export async function works() {
   const list = await api.get('/student/artworks');
   let filter = 'all';
+  let q = '';
   const grid = h('div', { class: 'grid tight' });
-  const seg = h('div', { class: 'segmented' });
+  const seg = h('div', { class: 'text-tabs', role: 'tablist' });
+  const search = h('input', { class: 'input', type: 'search', placeholder: '작품 검색', 'aria-label': '작품 검색', oninput: () => { q = search.value.trim().toLowerCase(); render(); } });
   const render = () => {
-    fill(seg, ...[['all', '전체'], ['draft', '그리는 중'], ['submitted', '제출']].map(([k, l]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; render(); } }, l)));
+    const tabs = [['all', '🗂️', '전체 작품'], ['draft', '✏️', '그리는 중'], ['submitted', '📮', '제출한 작품']];
+    fill(seg, tabs.map(([k, e, l], i) => [i ? h('span', { class: 'sep' }) : null, h('button', { class: filter === k ? 'on' : '', role: 'tab', 'aria-selected': String(filter === k), onclick: () => { filter = k; render(); } }, h('span', { class: 'ti' }, e), l)]));
     clear(grid);
-    const items = list.filter((a) => filter === 'all' || a.status === filter);
+    const items = list.filter((a) => (filter === 'all' || a.status === filter) && (!q || a.title.toLowerCase().includes(q) || (a.assignment_title || '').toLowerCase().includes(q)));
     if (!items.length) {
       grid.append(h('div', { style: { gridColumn: '1 / -1' } }, emptyState('🎨', '아직 작품이 없어요', '첫 그림을 그려 볼까요?', h('button', { class: 'btn primary', onclick: newDrawingSheet }, '새 그림 그리기'))));
       return;
@@ -262,5 +294,12 @@ export async function works() {
     });
   };
   render();
-  return shell(h('div', null, h('div', { class: 'page-head' }, h('h1', null, '내 작품'), h('div', { class: 'row' }, seg, h('button', { class: 'btn primary', onclick: newDrawingSheet }, '+ 새 그림'))), grid), { active: 'works' });
+  return shell(
+    h('div', null,
+      h('div', { class: 'row between', style: { marginBottom: '26px' } }, h('h1', { style: { margin: 0 } }, '작품'), h('button', { class: 'btn primary', onclick: newDrawingSheet }, '+ 새 그림')),
+      h('div', { class: 'toolbar-row' }, seg, h('div', { class: 'search' }, search)),
+      grid,
+    ),
+    { active: 'works' },
+  );
 }

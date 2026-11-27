@@ -49,7 +49,7 @@ function findRegions(barrier, W, H, step = 3) {
 
 export async function prepareColoring(svg, W, H, { seed = 1 } = {}) {
   const img = await loadImage(svgDataUrl(svg));
-  const lines = toLineLayer(img, W, H, { margin: Math.round(Math.min(W, H) * 0.03) });
+  const lines = toLineLayer(img, W, H, { margin: 0 });
   const ld = lines.getContext('2d').getImageData(0, 0, W, H).data;
   const barrier = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) barrier[i] = ld[i * 4 + 3] > 90 ? 1 : 0;

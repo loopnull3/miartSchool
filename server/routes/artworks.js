@@ -261,6 +261,7 @@ export function assignmentView(g) {
     due_date: g.due_date,
     created_at: g.created_at,
     closed: g.status === 'closed' || (g.end_at != null && g.end_at < now),
+    not_started: g.start_at != null && g.start_at > now,
     submitted_id: g.submitted_id ?? null,
     draft_id: g.draft_id ?? null,
   };
@@ -268,17 +269,15 @@ export function assignmentView(g) {
 
 r.get('/student/assignments', (req, res) => {
   const { student, klass } = requireStudent(req);
-  const now = new Date().toISOString();
   const rows = all(
     `SELECT g.*,
             (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'submitted' ORDER BY a.submitted_at DESC LIMIT 1) AS submitted_id,
             (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'draft' ORDER BY a.updated_at DESC LIMIT 1) AS draft_id
-       FROM assignments g WHERE g.class_id = ? AND (g.start_at IS NULL OR g.start_at <= ?)
+       FROM assignments g WHERE g.class_id = ?
       ORDER BY g.created_at DESC`,
     student.id,
     student.id,
     klass.id,
-    now,
   );
   res.json(rows.map(assignmentView));
 });
@@ -295,7 +294,8 @@ r.get('/student/assignments/:id', (req, res) => {
     Number(req.params.id),
     klass.id,
   );
-  if (!g || (g.start_at && g.start_at > new Date().toISOString())) throw new HttpError(404, '과제를 찾을 수 없어요.');
+  if (!g) throw new HttpError(404, '과제를 찾을 수 없어요.');
+  if (g.start_at && g.start_at > new Date().toISOString()) throw new HttpError(403, '아직 시작 전인 과제예요.');
   res.json(assignmentView(g));
 });
 

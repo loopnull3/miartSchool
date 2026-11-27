@@ -67,7 +67,7 @@ export async function templateSource(ref) {
 export async function loadTemplateLayer(ref, W, H) {
   const src = await templateSource(ref);
   if (!src) return null;
-  return { title: src.title, canvas: toLineLayer(src.image, W, H, { margin: Math.round(Math.min(W, H) * 0.02) }) };
+  return { title: src.title, canvas: toLineLayer(src.image, W, H, { margin: 0 }) };
 }
 
 export function templateThumbSrc(ref) {

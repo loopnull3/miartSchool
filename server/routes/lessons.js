@@ -10,12 +10,12 @@ let lessonsCache = null;
 export async function getLessons() {
   if (!lessonsCache) {
     try {
-      lessonsCache = (await import('../../shared/lessons.js')).LESSONS || [];
+      lessonsCache = (await import('../../shared/lessons.js')).LESSONS || null;
     } catch {
-      lessonsCache = [];
+      return [];
     }
   }
-  return lessonsCache;
+  return lessonsCache || [];
 }
 
 const EDITABLE = ['title', 'summary', 'description', 'technique', 'orientation', 'paper', 'template', 'steps', 'materials', 'minutes'];

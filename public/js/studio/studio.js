@@ -1,7 +1,7 @@
 // 드로잉 스튜디오: 수채화/유화 기법 · 레이어 · 브러시 · 채우기 · 도장 · 올가미 · 스포이드 · 배경지
 // · 수업 자료 · 확대/이동 · 실행 취소 · 드로잉 통계
 import { h, clear, toast, confirmDialog, switchInput } from '../ui.js';
-import { BRUSHES, OIL_PRESETS, StrokeRenderer, textureCanvas, makeSampler, renderBrushSample } from './brushes.js';
+import { BRUSHES, OIL_PRESETS, StrokeRenderer, textureCanvas, makeSampler, renderBrushSample, wetEdge } from './brushes.js';
 import { floodFill } from './fill.js';
 import { History } from './history.js';
 import { PALETTE, PSYCH_PALETTE, hexToRgb, rgbToHex, classifyColor, hsl } from './color.js';
@@ -301,6 +301,7 @@ export function createStudio(root, opts = {}) {
       else b = Math.max(b, vh - paletteEl.offsetTop + 14);
     }
     if (state.panelOpen && isWide() && inspector.offsetWidth) r = Math.max(r, vw - inspector.offsetLeft + 14);
+    if (sheet.classList.contains('open') && isWide() && sheet.offsetWidth) r = Math.max(r, vw - sheet.offsetLeft + 14);
     return { l, t, r, b, vw, vh };
   }
 
@@ -684,6 +685,7 @@ export function createStudio(root, opts = {}) {
       if (s.brush.erase) stats.eraseCount += 1;
       else stats.strokeCount += 1;
     } else if (rect) {
+      if (s.brush.wetEdge) wetEdge(preview, rect, state.sizes[s.toolKey], s.brush.wetEdge);
       const before = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
       layer.ctx.save();
       layer.ctx.globalAlpha = state.opacity[s.toolKey];
@@ -1279,7 +1281,7 @@ export function createStudio(root, opts = {}) {
     }
 
     if (brush) {
-      const s = sec(t === 'oil' ? '붓 크기' : '굵기');
+      const s = sec(t === 'oil' ? '붓 크기 (호수)' : brush.strength != null ? '크기와 세기' : brush.erase || psych ? '크기' : '굵기와 진하기');
       if (t === 'oil') {
         const chips = h('div', { class: 'preset-chips' });
         for (const p of OIL_PRESETS) {
@@ -1577,6 +1579,7 @@ export function createStudio(root, opts = {}) {
     sheet.setAttribute('aria-hidden', String(!want));
     materialsBtn.classList.toggle('on', want);
     el.classList.toggle('sheet-open', want);
+    if (state.autoFit && isWide()) requestAnimationFrame(() => fit());
   }
 
   function setGuide(g) {
