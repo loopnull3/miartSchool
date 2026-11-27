@@ -121,7 +121,7 @@ test('마음 탐색 AI 요약: 그림 이미지 + 답변 전달, 이름은 보�
   const klass = await call('POST', '/classes', { name: '비밀반' });
   const kids = await call('POST', `/classes/${klass.data.id}/students`, { names: '홍길동' });
   const kid = kids.data[0];
-  await call('POST', '/auth/student-login', { code: klass.data.code, studentId: kid.id, pin: kid.pin }, 'kid');
+  await call('POST', '/auth/student/login', { code: kid.access_code, animal: kid.animal, fruit: kid.fruit }, 'kid');
   const camp = await call('POST', `/classes/${klass.data.id}/psych`, { title: '테스트' });
   const drawing = { image: PNG, thumb: PNG, stats: { strokeCount: 30, pixel: { inkRatio: 0.1, bboxRatio: 0.3, centroid: { x: 0.5, y: 0.5 } } } };
   const sub = await call('POST', `/student/psych/${camp.data.id}/submit`, { answers: { h1: 'family', h3: '거실', s1: 'sunny' }, drawings: { house: drawing, tree: drawing, person: drawing } }, 'kid');

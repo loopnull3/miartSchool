@@ -648,6 +648,385 @@ ${tufts(530, [270, 530])}
 `);
 
 // ---------------------------------------------------------------------------
+// 수업 자료용 도안 (겨울·연말·교과 연계)
+// ---------------------------------------------------------------------------
+
+// 눈송이 (선만 있어 칠하는 칸을 만들지 않음)
+const flakeD = (x, y, r) =>
+  [90, 30, -30]
+    .map((a) => {
+      const p = pt(x, y, r, a);
+      const q = pt(x, y, r, a + 180);
+      return `M${p[0]} ${p[1]}L${q[0]} ${q[1]}`;
+    })
+    .join('');
+const flakes = (list) => thin(`<path d="${list.map(([x, y, r]) => flakeD(x, y, r)).join('')}"/>`);
+
+// 오른쪽(xR)에서 왼쪽(xL)으로, 아래로 볼록한 작은 호 n개 (눈 쌓인 가장자리)
+function bumpsD(xR, xL, y, n, k = 0.62) {
+  const w = (xR - xL) / n;
+  const r = f(w * k);
+  let d = '';
+  for (let i = 1; i <= n; i++) d += `A${r} ${r} 0 0 1 ${f(xR - i * w)} ${f(y)}`;
+  return d;
+}
+
+// 두 원이 겹쳐 생기는 초승달
+function crescentD(cx, cy, r, dx, dy, r2) {
+  const d = Math.hypot(dx, dy);
+  const a = (r * r - r2 * r2 + d * d) / (2 * d);
+  const h = Math.sqrt(r * r - a * a);
+  const mx = cx + (a * dx) / d;
+  const my = cy + (a * dy) / d;
+  const p1 = [f(mx + (h * dy) / d), f(my - (h * dx) / d)];
+  const p2 = [f(mx - (h * dy) / d), f(my + (h * dx) / d)];
+  return `M${p1[0]} ${p1[1]}A${r} ${r} 0 1 0 ${p2[0]} ${p2[1]}A${r2} ${r2} 0 0 1 ${p1[0]} ${p1[1]}Z`;
+}
+
+// 눈 덮인 지붕 집
+function snowHouse(x, base, w, h, roofH, { chimney = true, round = false, wreath = false } = {}) {
+  const top = base - h;
+  const cx = x + w / 2;
+  const apex = top - roofH;
+  const L = x - 16;
+  const R = x + w + 16;
+  const rb = top + 8;
+  const onEdge = (frac, side) => f(cx + side * (R - cx) * frac);
+  const edgeY = (frac) => f(apex + (rb - apex) * frac);
+  let s = '';
+  if (chimney) {
+    const x0 = onEdge(0.58, 1);
+    const ct = f(apex + roofH * 0.28);
+    s += `<rect x="${x0}" y="${ct}" width="20" height="${f(top - ct)}"${W}/>`;
+    s += `<rect x="${f(x0 - 5)}" y="${f(ct - 9)}" width="30" height="14" rx="7"${W}/>`;
+  }
+  s += `<rect x="${x}" y="${top}" width="${w}" height="${h}"${W}/>`;
+  s += `<polygon points="${L},${rb} ${f(cx)},${apex} ${R},${rb}"${W}/>`;
+  const sy = edgeY(0.4);
+  s += `<path d="M${onEdge(0.4, 1)} ${sy}${bumpsD(onEdge(0.4, 1), onEdge(0.4, -1), sy, 3)}"/>`;
+  if (round) s += `<circle cx="${f(cx)}" cy="${edgeY(0.74)}" r="10"/>`;
+  const wy = top + 22;
+  s += `<rect x="${x + 16}" y="${wy}" width="30" height="30" rx="3"/>`;
+  s += thin(`<path d="M${x + 31} ${wy}V${wy + 30}M${x + 16} ${wy + 15}H${x + 46}"/>`);
+  const dx = x + w - 44;
+  s += `<path d="M${dx} ${base}V${base - 38}A14 14 0 0 1 ${dx + 28} ${base - 38}V${base}"/>`;
+  if (wreath) s += thin(`<circle cx="${dx + 14}" cy="${base - 30}" r="8"/>`);
+  return s;
+}
+
+// 눈 쌓인 전나무 (아래 칸부터 그려 위 칸이 덮음)
+function snowPine(cx, base) {
+  const tier = (apex, b, half, n) =>
+    `<path d="M${cx} ${apex}L${cx + half} ${b}${bumpsD(cx + half, cx - half, b, n)}Z"${W}/>`;
+  return (
+    `<rect x="${cx - 11}" y="${base - 30}" width="22" height="42"${W}/>` +
+    tier(base - 107, base - 22, 56, 4) +
+    tier(base - 137, base - 62, 45, 3) +
+    tier(base - 162, base - 100, 34, 3)
+  );
+}
+
+const SNOW_VILLAGE = svg(`
+<path d="${crescentD(700, 84, 38, 18, -14, 32)}"/>
+${flakes([[60, 60, 13], [175, 128, 10], [300, 66, 12], [520, 58, 11], [610, 160, 12], [770, 236, 9], [40, 250, 10], [492, 196, 9]])}
+${thin(`<circle cx="132" cy="196" r="5"/><circle cx="258" cy="208" r="5"/><circle cx="568" cy="92" r="5"/><circle cx="472" cy="128" r="5"/>`)}
+<path d="M0 415C150 375 290 392 400 405S650 380 800 402"/>
+${thin(`<circle cx="172" cy="262" r="8"/><circle cx="184" cy="238" r="11"/><circle cx="202" cy="210" r="14"/>`)}
+${snowHouse(55, 412, 110, 80, 62, { wreath: true })}
+${snowHouse(625, 410, 100, 92, 62, { chimney: false, round: true })}
+<path d="M0 500Q200 488 400 496T800 492"/>
+${snowPine(225, 522)}
+${snowPine(578, 528)}
+${thin(`<path d="M60 542Q85 530 110 542M650 552Q676 540 702 552M190 568Q215 556 240 568M540 572Q565 560 590 572"/>`)}
+<path d="M352 318L290 272M448 318L510 272"/>
+${thin(`<path d="M312 288.3L304 266M290 272L276 262M290 272L276 280M488 288.3L496 266M510 272L524 262M510 272L524 280"/>`)}
+<circle cx="400" cy="452" r="80"${W}/>
+<circle cx="400" cy="330" r="60"${W}/>
+<circle cx="400" cy="226" r="48"${W}/>
+<path d="M422 292L428 368L462 360L450 286Z"${W}/>
+${thin(`<path d="M423.2 323.4L456.6 315.6M425.6 346.2L460.4 337.8"/>`)}
+<path d="M350 258Q400 284 450 258L455 284Q400 314 345 284Z"${W}/>
+<rect x="364" y="104" width="72" height="74" rx="6"${W}/>
+${thin(`<path d="M364 148H436M364 164H436"/>`)}
+<rect x="346" y="172" width="108" height="18" rx="8"${W}/>
+${eye(382, 212, 7, 9)}${eye(418, 212, 7, 9)}
+<path d="M400 220Q390 232 400 244L448 234Z"${W} stroke-width="5"/>
+${[[379, 250], [389, 255], [400, 257], [411, 255], [421, 250]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5"${D} stroke="none"/>`).join('')}
+<g stroke-width="5"><circle cx="400" cy="324" r="8"/><circle cx="400" cy="354" r="8"/><circle cx="400" cy="420" r="9"/><circle cx="400" cy="456" r="9"/></g>
+`);
+
+// 크리스마스 트리
+// 트리 한 칸: [꼭짓점 y, 밑변 y, 밑변 반폭, 물결 수]
+const TIERS = [
+  [222, 426, 172, 7],
+  [156, 326, 136, 6],
+  [100, 230, 96, 5],
+];
+const treeTier = ([apex, base, half, n]) =>
+  `<path d="M400 ${apex}L${400 + half} ${base}${bumpsD(400 + half, 400 - half, base, n)}Z"${W}/>`;
+// 칸 양옆 선 사이를 늘어진 띠로 잇는 장식 줄 (끝점이 옆선 위에 정확히 놓임)
+const swagD = ([apex, base, half], y, sag) => {
+  const dx = f((half * (y - apex)) / (base - apex));
+  return `M${f(400 - dx)} ${y}Q400 ${y + 2 * sag} ${f(400 + dx)} ${y}`;
+};
+const garland = (tier, y, sag, gap = 15) => `<path d="${swagD(tier, y, sag)}${swagD(tier, y + gap, sag)}"/>`;
+// 물결 사이 뾰족한 곳(cusp)에 매단 방울
+const cuspX = ([, , half, n], k) => f(400 - half + (2 * half * k) / n);
+const ornament = (x, y, r, band = false) =>
+  `<rect x="${f(x - 5)}" y="${f(y - r - 8)}" width="10" height="9" rx="2"${D} stroke-width="4"/>` +
+  `<circle cx="${x}" cy="${y}" r="${r}"${W} stroke-width="5"/>` +
+  (band ? thin(`<path d="M${f(x - r)} ${y}H${f(x + r)}"/>`) : '');
+// 리본을 두른 선물 상자 (x: 왼쪽, base: 바닥)
+function present(x, base, w, h, rib = 18) {
+  const top = base - h;
+  const c = x + w / 2;
+  const lt = top - 14;
+  return (
+    `<rect x="${x}" y="${top}" width="${w}" height="${h}"${W}/>` +
+    `<rect x="${x - 8}" y="${lt}" width="${w + 16}" height="22" rx="4"${W}/>` +
+    `<path d="M${c - rib / 2} ${lt}V${base}M${c + rib / 2} ${lt}V${base}"/>` +
+    `<path d="M${c} ${lt}C${c - 25} ${lt - 38} ${c - 53} ${lt - 26} ${c - 41} ${lt - 8}C${c - 35} ${lt + 2} ${c - 15} ${lt + 4} ${c} ${lt}Z"${W}/>` +
+    `<path d="M${c} ${lt}C${c + 25} ${lt - 38} ${c + 53} ${lt - 26} ${c + 41} ${lt - 8}C${c + 35} ${lt + 2} ${c + 15} ${lt + 4} ${c} ${lt}Z"${W}/>` +
+    `<ellipse cx="${c}" cy="${lt - 3}" rx="11" ry="9"${W}/>`
+  );
+}
+
+const XMAS_TREE = svg(`
+<path d="M0 540H800"/>
+${thin(`${sparkle(90, 92, 20)}${sparkle(712, 92, 20)}${sparkle(150, 300, 14)}${sparkle(652, 300, 14)}${sparkle(56, 400, 11)}${sparkle(746, 400, 11)}<circle cx="210" cy="190" r="5"/><circle cx="590" cy="190" r="5"/><circle cx="60" cy="230" r="5"/><circle cx="742" cy="230" r="5"/>`)}
+${flakes([[245, 70, 12], [556, 70, 12]])}
+<rect x="380" y="418" width="40" height="50"${W}/>
+${treeTier(TIERS[0])}
+${garland(TIERS[0], 360, 18)}
+${treeTier(TIERS[1])}
+${garland(TIERS[1], 262, 16)}
+${treeTier(TIERS[2])}
+${garland(TIERS[2], 168, 15)}
+${ornament(400, 140, 11, true)}
+${ornament(cuspX(TIERS[2], 1), 234, 10)}${ornament(cuspX(TIERS[2], 4), 234, 10)}
+${ornament(cuspX(TIERS[1], 2), 330, 11, true)}${ornament(cuspX(TIERS[1], 4), 330, 11, true)}
+${ornament(cuspX(TIERS[0], 2), 430, 11)}${ornament(cuspX(TIERS[0], 5), 430, 11)}
+<polygon points="${starPts(400, 62, 38)}"${W}/>
+<path d="M345 486H455L440 540H360Z"${W}/>
+<rect x="330" y="462" width="140" height="24" rx="6"${W}/>
+${heart(400, 514, 11)}
+${present(90, 540, 110, 70)}
+${present(600, 540, 90, 92)}
+`);
+
+// 선물 상자 (규칙 무늬 칸)
+const zigzagD = (x0, x1, y, amp, n) => {
+  const w = (x1 - x0) / n;
+  let d = `M${x0} ${y}`;
+  for (let i = 1; i < n; i++) d += `L${f(x0 + i * w)} ${i % 2 ? y - amp : y + amp}`;
+  return d + `L${x1} ${y}`;
+};
+const triUp = (x, y) => `<polygon points="${x - 18},${y + 17} ${x},${y - 17} ${x + 18},${y + 17}"/>`;
+const triDown = (x, y) => `<polygon points="${x - 18},${y - 17} ${x},${y + 17} ${x + 18},${y - 17}"/>`;
+const bowLoops = (c, y, s) =>
+  `<path d="M${c} ${y}C${c - 40 * s} ${y - 58 * s} ${c - 104 * s} ${y - 54 * s} ${c - 88 * s} ${y - 18 * s}C${c - 78 * s} ${y + 4 * s} ${c - 32 * s} ${y + 6 * s} ${c} ${y}Z"${W}/>` +
+  `<path d="M${c} ${y}C${c + 40 * s} ${y - 58 * s} ${c + 104 * s} ${y - 54 * s} ${c + 88 * s} ${y - 18 * s}C${c + 78 * s} ${y + 4 * s} ${c + 32 * s} ${y + 6 * s} ${c} ${y}Z"${W}/>`;
+const balloon = (x, y, rx, ry, len) =>
+  thin(`<path d="M${x} ${y + ry + 10}C${x - 14} ${y + ry + 40} ${x + 16} ${y + ry + 70} ${x} ${y + ry + len}"/>`) +
+  `<polygon points="${x},${y + ry - 2} ${x - 8},${y + ry + 10} ${x + 8},${y + ry + 10}"${D} stroke-width="4"/>` +
+  `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}"${W}/>` +
+  thin(`<path d="M${x - rx * 0.55} ${y - ry * 0.3}Q${x - rx * 0.45} ${y - ry * 0.68} ${x - rx * 0.1} ${y - ry * 0.78}"/>`);
+
+const GIFT_BOX = svg(`
+<path d="M0 540H800"/>
+${thin(`${sparkle(262, 112, 16)}${sparkle(540, 104, 18)}${sparkle(36, 330, 12)}${sparkle(766, 300, 12)}<circle cx="330" cy="70" r="5"/><circle cx="470" cy="62" r="5"/><circle cx="226" cy="214" r="5"/><circle cx="574" cy="206" r="5"/><circle cx="34" cy="80" r="5"/><circle cx="770" cy="70" r="5"/>`)}
+${balloon(128, 140, 46, 56, 120)}
+${balloon(680, 126, 44, 54, 110)}
+<rect x="250" y="300" width="300" height="240"${W}/>
+<path d="M250 386H382M418 386H550M250 463H382M418 463H550"/>
+<g stroke-width="5">
+${[272, 316, 360, 440, 484, 528].map((x) => `<circle cx="${x}" cy="347" r="15"/>`).join('')}
+${[272, 316, 360, 440, 484, 528].map((x, i) => (i % 2 ? triDown(x, 424.5) : triUp(x, 424.5))).join('')}
+${[272, 316, 360, 440, 484, 528].map((x) => heart(x, 503, 14)).join('')}
+</g>
+<rect x="232" y="252" width="336" height="56" rx="8"${W}/>
+<path d="${zigzagD(232, 382, 280, 13, 8)}${zigzagD(418, 568, 280, 13, 8)}" stroke-width="5"/>
+<path d="M382 252V540M418 252V540"/>
+${bowLoops(400, 254, 1)}
+${thin(`<path d="M384 246C366 226 344 220 330 228M416 246C434 226 456 220 470 228"/>`)}
+<rect x="384" y="234" width="32" height="28" rx="9"${W}/>
+<rect x="70" y="440" width="130" height="100"${W}/>
+<g stroke-width="5"><circle cx="98" cy="474" r="10"/><circle cx="98" cy="514" r="10"/><circle cx="172" cy="474" r="10"/><circle cx="172" cy="514" r="10"/></g>
+<rect x="60" y="420" width="150" height="30" rx="6"${W}/>
+<path d="M126 420V540M144 420V540"/>
+${bowLoops(135, 422, 0.5)}
+<circle cx="135" cy="418" r="9"${W}/>
+<rect x="600" y="390" width="110" height="150"${W}/>
+<path d="M600 455H646M664 455H710M600 473H646M664 473H710"/>
+${thin(`${star(623, 422, 15)}${star(687, 422, 15)}${star(623, 508, 15)}${star(687, 508, 15)}`)}
+<rect x="590" y="368" width="130" height="30" rx="6"${W}/>
+<path d="M646 368V540M664 368V540"/>
+${bowLoops(655, 370, 0.55)}
+<circle cx="655" cy="366" r="9"${W}/>
+`);
+
+// 펭귄 가족 (ox, oy: 발 아래 가운데, s: 크기. 높이 300 기준 좌표)
+function penguin(ox, oy, s, kind) {
+  const P = (x, y) => `${f(ox + x * s)} ${f(oy + y * s)}`;
+  const X = (x) => f(ox + x * s);
+  const Y = (y) => f(oy + y * s);
+  const R = (r) => f(r * s);
+  const flip = (k) =>
+    `<path d="M${P(-84 * k, -192)}C${P(-128 * k, -170)} ${P(-150 * k, -112)} ${P(-136 * k, -80)}C${P(-120 * k, -78)} ${P(-100 * k, -108)} ${P(-86 * k, -126)}Z"${W}/>`;
+  const baby = kind === 'baby';
+  let out =
+    flip(1) +
+    flip(-1) +
+    `<path d="M${P(0, -300)}C${P(72, -300)} ${P(98, -215)} ${P(96, -130)}C${P(94, -48)} ${P(70, 0)} ${P(0, 0)}C${P(-70, 0)} ${P(-94, -48)} ${P(-96, -130)}C${P(-98, -215)} ${P(-72, -300)} ${P(0, -300)}Z"${W}/>`;
+  // 하얀 얼굴·배: 어른은 하트 모양 얼굴, 아기는 둥근 달걀 모양
+  out += baby
+    ? `<ellipse cx="${ox}" cy="${Y(-118)}" rx="${R(60)}" ry="${R(96)}" stroke-width="5"/>`
+    : `<path d="M${P(0, -26)}C${P(-46, -26)} ${P(-64, -70)} ${P(-62, -124)}C${P(-60, -160)} ${P(-72, -194)} ${P(-58, -224)}C${P(-46, -248)} ${P(-14, -250)} ${P(0, -228)}C${P(14, -250)} ${P(46, -248)} ${P(58, -224)}C${P(72, -194)} ${P(60, -160)} ${P(62, -124)}C${P(64, -70)} ${P(46, -26)} ${P(0, -26)}Z" stroke-width="5"/>`;
+  out +=
+    `<ellipse cx="${X(-42)}" cy="${Y(-2)}" rx="${R(31)}" ry="${R(15)}"${W}/>` +
+    `<ellipse cx="${X(42)}" cy="${Y(-2)}" rx="${R(31)}" ry="${R(15)}"${W}/>`;
+  const ey = baby ? -180 : -206;
+  out += eye(X(-28), Y(ey), R(9), R(12)) + eye(X(28), Y(ey), R(9), R(12));
+  const by = baby ? -156 : -188;
+  out += `<path d="M${P(-18, by)}Q${P(0, by - 8)} ${P(18, by)}L${P(0, by + 22)}Z"${W} stroke-width="${baby ? 4 : 5}"/>`;
+  if (!baby) out += thin(`<ellipse cx="${X(-46)}" cy="${Y(-178)}" rx="${R(11)}" ry="${R(7)}"/><ellipse cx="${X(46)}" cy="${Y(-178)}" rx="${R(11)}" ry="${R(7)}"/>`);
+  if (kind === 'tie') {
+    out += `<g stroke-width="5"><polygon points="${P(-32, -156).replace(' ', ',')} ${P(0, -142).replace(' ', ',')} ${P(-32, -128).replace(' ', ',')}"${W}/><polygon points="${P(32, -156).replace(' ', ',')} ${P(0, -142).replace(' ', ',')} ${P(32, -128).replace(' ', ',')}"${W}/><circle cx="${X(0)}" cy="${Y(-142)}" r="8"${W}/></g>`;
+  }
+  if (kind === 'bow') {
+    out += `<g stroke-width="5"><polygon points="${P(38, -288).replace(' ', ',')} ${P(10, -308).replace(' ', ',')} ${P(12, -268).replace(' ', ',')}"${W}/><polygon points="${P(38, -288).replace(' ', ',')} ${P(66, -308).replace(' ', ',')} ${P(64, -268).replace(' ', ',')}"${W}/><circle cx="${X(38)}" cy="${Y(-288)}" r="8"${W}/></g>`;
+  }
+  if (baby) {
+    // 방울 달린 털모자
+    out +=
+      `<path d="M${P(-76, -246)}C${P(-76, -342)} ${P(76, -342)} ${P(76, -246)}Z"${W}/>` +
+      `<rect x="${X(-84)}" y="${Y(-264)}" width="${R(168)}" height="${R(28)}" rx="${R(13)}"${W}/>` +
+      thin(`<path d="${[-50, -17, 17, 50].map((x) => `M${X(x)} ${Y(-264)}V${Y(-236)}`).join('')}"/>`) +
+      `<circle cx="${ox}" cy="${Y(-340)}" r="${R(22)}"${W}/>`;
+  }
+  return out;
+}
+
+const PENGUIN = svg(`
+${sun(92, 88, 34)}
+${cloud(690, 86, 72, 30)}
+${flakes([[250, 62, 12], [400, 120, 11], [540, 60, 12], [330, 200, 9], [476, 214, 9], [30, 240, 9], [780, 196, 9]])}
+<path d="M0 372H800"/>
+<polygon points="18,372 58,306 92,322 128,262 168,318 202,372"${W}/>
+<polygon points="600,372 640,292 674,308 712,238 752,298 800,286 800,372"${W}/>
+${thin(`<path d="M128 262L118 302L132 332M712 238L700 282L716 316"/>`)}
+${thin(`<path d="M682 402Q696 392 710 402M740 424Q754 414 768 424M300 400Q314 390 328 400M470 396Q484 386 498 396"/>`)}
+<path d="M0 452Q200 438 400 450T800 446"/>
+<ellipse cx="66" cy="546" rx="50" ry="17"${W}/>
+${thin(`<ellipse cx="66" cy="546" rx="32" ry="9"/>`)}
+<g transform="rotate(-24 74 500)">
+<path d="M102 500L122 486V514Z"${W} stroke-width="5"/>
+<ellipse cx="78" cy="500" rx="28" ry="14"${W} stroke-width="5"/>
+<circle cx="64" cy="497" r="3.5"${D} stroke="none"/>
+</g>
+<path d="${cloudD(744, 530, 54, 30, 4)}"${W}/>
+${penguin(200, 508, 0.95, 'tie')}
+${penguin(605, 508, 0.88, 'bow')}
+${penguin(402, 548, 0.6, 'baby')}
+`);
+
+// 관람차
+const FERRIS_WHEEL = svg(`
+${sun(92, 88, 34)}
+${cloud(196, 70, 54, 24, 4)}
+${cloud(690, 96, 64, 28)}
+${thin(`<path d="M548 66Q558 56 568 66Q578 56 588 66M602 40Q610 32 618 40Q626 32 634 40"/>`)}
+<path d="M0 544H800"/>
+<rect x="320" y="468" width="160" height="14"${W}/>
+<polygon points="388,250 402,256 318,528 290,528"${W}/>
+<polygon points="412,250 398,256 482,528 510,528"${W}/>
+<circle cx="400" cy="245" r="178"${W}/>
+<circle cx="400" cy="245" r="156"/>
+<circle cx="400" cy="245" r="74" stroke-width="5"/>
+<path d="${spin('M400 221L400 89', 8, 0, 400, 245)}" stroke-width="5"/>
+<circle cx="400" cy="245" r="24"${W}/>
+<circle cx="400" cy="245" r="7"${D}/>
+${Array.from({ length: 8 }, (_, i) => {
+  const [x, y] = pt(400, 245, 167, -90 + i * 45);
+  return (
+    `<circle cx="${x}" cy="${y}" r="30"${W}/>` +
+    thin(`<rect x="${f(x - 16)}" y="${f(y - 15)}" width="32" height="15" rx="5"/><path d="M${f(x - 29.4)} ${f(y + 6)}H${f(x + 29.4)}"/>`)
+  );
+}).join('')}
+<rect x="255" y="520" width="290" height="24" rx="4"${W}/>
+<rect x="30" y="360" width="90" height="184"${W}/>
+<rect x="24" y="348" width="102" height="14" rx="3"${W}/>
+${thin([380, 420, 460, 500].map((y) => `<rect x="45" y="${y}" width="22" height="22" rx="2"/><rect x="83" y="${y}" width="22" height="22" rx="2"/>`).join(''))}
+<rect x="140" y="470" width="80" height="74"${W}/>
+<polygon points="128,476 180,426 232,476"${W}/>
+<circle cx="180" cy="458" r="9" stroke-width="5"/>
+<rect x="168" y="506" width="24" height="38"/>
+<rect x="575" y="420" width="110" height="124"${W}/>
+<rect x="595" y="430" width="70" height="22" rx="5" stroke-width="5"/>
+<path d="M567 462H693V478${bumpsD(693, 567, 478, 6)}Z"${W}/>
+${thin(`<path d="M588 462V478M609 462V478M630 462V478M651 462V478M672 462V478"/>`)}
+<rect x="595" y="500" width="26" height="44"/>
+<rect x="633" y="500" width="38" height="28" rx="3"/>
+<rect x="702" y="330" width="74" height="214"${W}/>
+<path d="M739 330V300"/>
+<circle cx="739" cy="294" r="7"${W}/>
+${thin([352, 394, 436, 478].map((y) => `<rect x="716" y="${y}" width="18" height="26" rx="2"/><rect x="744" y="${y}" width="18" height="26" rx="2"/>`).join(''))}
+`);
+
+// 책 읽는 곰
+const READING_BEAR = svg(`
+<path d="M0 450H800"/>
+<rect x="55" y="70" width="150" height="130" rx="6"${W}/>
+${thin(`<path d="M130 70V200M55 135H205"/>`)}
+<path d="${crescentD(94, 104, 18, 9, -7, 15)}" stroke-width="5"/>
+<polygon points="${starPts(168, 104, 13)}" stroke-width="5"/>
+<rect x="45" y="200" width="170" height="14" rx="4"${W}/>
+<rect x="604" y="128" width="22" height="72" rx="3"${W}/>
+<rect x="628" y="140" width="24" height="60" rx="3"${W}/>
+<rect x="654" y="118" width="20" height="82" rx="3"${W}/>
+${thin(`<path d="M604 146H626M604 182H626M654 136H674M654 182H674"/>`)}
+<ellipse cx="710" cy="140" rx="10" ry="22" transform="rotate(-30 710 140)"${W} stroke-width="5"/>
+<ellipse cx="736" cy="140" rx="10" ry="22" transform="rotate(30 736 140)"${W} stroke-width="5"/>
+<path d="M700 168H746L740 200H706Z"${W}/>
+<rect x="590" y="200" width="170" height="12" rx="3"${W}/>
+${thin(`${sparkle(276, 62, 14)}${sparkle(528, 60, 14)}${sparkle(560, 262, 12)}${sparkle(240, 262, 12)}<circle cx="252" cy="150" r="5"/><circle cx="560" cy="160" r="5"/>`)}
+<ellipse cx="400" cy="530" rx="250" ry="36"${W}/>
+${thin(`<ellipse cx="400" cy="530" rx="222" ry="23"/>`)}
+<path d="M330 292C268 325 250 440 280 520H520C550 440 532 325 470 292Z"${W}/>
+${thin(`<ellipse cx="400" cy="452" rx="68" ry="56"/>`)}
+<circle cx="322" cy="118" r="34"${W}/>
+<circle cx="478" cy="118" r="34"${W}/>
+${thin(`<circle cx="322" cy="118" r="17"/><circle cx="478" cy="118" r="17"/>`)}
+<circle cx="400" cy="190" r="96"${W}/>
+<ellipse cx="400" cy="230" rx="44" ry="33"${W}/>
+<ellipse cx="400" cy="214" rx="16" ry="11"${D}/>
+${thin(`<path d="M400 225V238M400 238Q390 248 379 241M400 238Q410 248 421 241"/><ellipse cx="334" cy="228" rx="14" ry="9"/><ellipse cx="466" cy="228" rx="14" ry="9"/>`)}
+${eye(362, 186, 8, 10)}${eye(438, 186, 8, 10)}
+<ellipse cx="325" cy="505" rx="46" ry="28"${W}/>
+<ellipse cx="475" cy="505" rx="46" ry="28"${W}/>
+${thin(`<ellipse cx="325" cy="510" rx="20" ry="12"/><ellipse cx="475" cy="510" rx="20" ry="12"/><circle cx="305" cy="489" r="6"/><circle cx="325" cy="485" r="6"/><circle cx="345" cy="489" r="6"/><circle cx="455" cy="489" r="6"/><circle cx="475" cy="485" r="6"/><circle cx="495" cy="489" r="6"/>`)}
+<path d="M400 322C362 304 312 304 276 318L268 426C306 414 362 416 400 436C438 416 494 414 532 426L524 318C488 304 438 304 400 322Z"${W}/>
+<path d="M400 310C366 292 318 292 284 306L278 412C314 402 364 404 400 422Z"${W}/>
+<path d="M400 310C434 292 482 292 516 306L522 412C486 402 436 404 400 422Z"${W}/>
+${thin(`<path d="M300 334Q340 326 384 336M298 356Q340 348 384 358M296 378Q338 370 384 380"/>`)}
+<polygon points="${starPts(460, 354, 27)}" stroke-width="4"/>
+<ellipse cx="284" cy="392" rx="26" ry="22"${W}/>
+<ellipse cx="516" cy="392" rx="26" ry="22"${W}/>
+<rect x="40" y="481" width="170" height="44" rx="6"${W}/>
+${thin(`<path d="M62 481V525M188 481V525"/>`)}
+<rect x="56" y="441" width="146" height="40" rx="6"${W}/>
+${thin(`<path d="M80 441V481M178 441V481"/>`)}
+<rect x="48" y="405" width="158" height="36" rx="6"${W}/>
+${thin(`<rect x="100" y="414" width="54" height="18" rx="3"/>`)}
+${apple(128, 385, 20)}
+<path d="M630 456H730V505Q730 525 710 525H650Q630 525 630 505Z"${W}/>
+<path d="M730 468C768 468 768 518 730 518M730 481C752 481 752 505 730 505"/>
+<ellipse cx="680" cy="456" rx="50" ry="10"${W}/>
+${heart(680, 494, 13)}
+${thin(`<path d="M662 436C652 418 672 408 662 390M698 436C688 418 708 408 698 390"/>`)}
+`);
+
+// ---------------------------------------------------------------------------
 // 목록
 // ---------------------------------------------------------------------------
 
@@ -777,6 +1156,48 @@ export const BUILTIN_TEMPLATES = [
     category: '상상',
     keywords: ['성', '궁전', '공주', '왕자', '동화', '요정', '왕국', 'castle', 'palace', 'princess', 'prince', 'fairy', 'kingdom'],
     svg: CASTLE,
+  },
+  {
+    id: 'builtin:snow-village',
+    title: '눈사람과 겨울 풍경',
+    category: '자연',
+    keywords: ['눈사람', '눈오는날', '눈송이', '함박눈', '눈싸움', '겨울', '겨울마을', '전나무', '목도리', 'snowman', 'snow', 'winter', 'snowflake'],
+    svg: SNOW_VILLAGE,
+  },
+  {
+    id: 'builtin:xmas-tree',
+    title: '크리스마스 트리',
+    category: '생활',
+    keywords: ['크리스마스', '크리스마스트리', '성탄절', '성탄', '트리', '오너먼트', '연말', '산타', 'christmas', 'xmas', 'santa'],
+    svg: XMAS_TREE,
+  },
+  {
+    id: 'builtin:gift-box',
+    title: '선물 상자',
+    category: '생활',
+    keywords: ['선물', '선물상자', '상자', '리본', '풍선', '규칙', '반복무늬', 'gift', 'present', 'box', 'ribbon', 'balloon'],
+    svg: GIFT_BOX,
+  },
+  {
+    id: 'builtin:penguin',
+    title: '펭귄 가족',
+    category: '동물',
+    keywords: ['펭귄', '아기펭귄', '펭귄가족', '남극', '북극', '빙하', '빙산', '얼음', 'penguin', 'antarctica', 'iceberg'],
+    svg: PENGUIN,
+  },
+  {
+    id: 'builtin:ferris-wheel',
+    title: '관람차',
+    category: '탈것',
+    keywords: ['관람차', '회전관람차', '놀이공원', '놀이동산', '동네', '우리동네', '도시', '빌딩', 'ferris', 'amusement', 'town', 'city'],
+    svg: FERRIS_WHEEL,
+  },
+  {
+    id: 'builtin:reading-bear',
+    title: '책 읽는 곰',
+    category: '동물',
+    keywords: ['곰', '곰돌이', '아기곰', '책', '독서', '책읽기', '도서관', '이야기', '동화책', 'bear', 'teddy', 'book', 'reading'],
+    svg: READING_BEAR,
   },
 ];
 

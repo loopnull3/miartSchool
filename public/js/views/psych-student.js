@@ -1,6 +1,6 @@
 // 학생: 그림 마음 탐색 진행 (집 → 질문 → 나무 → 질문 → 사람 → 질문 → 마음 날씨 → 완료)
 import { api } from '../api.js';
-import { h, clear, toast, toastError, confirmDialog } from '../ui.js';
+import { h, clear, fill, toast, toastError, confirmDialog } from '../ui.js';
 import { go, onLeave, shell } from '../app.js';
 import { createStudio } from '../studio/studio.js';
 import { PSYCH_STEPS } from '/shared/psych-questions.js';
@@ -170,14 +170,14 @@ export async function psychTest({ params }) {
       done(r.kid);
     } catch (ex) {
       toastError(ex);
-      clear(root).append(
+      fill(root, 
         shell(h('div', { class: 'page narrow center' }, h('div', { class: 'card pad-lg mt-lg' }, h('h2', null, '보내지 못했어요'), h('p', { class: 'muted' }, ex.message), h('button', { class: 'btn primary', onclick: () => submit() }, '다시 보내기'))), { wide: '' }),
       );
     }
   }
 
   function done(kid) {
-    clear(root).append(
+    fill(root, 
       shell(
         h('div', { class: 'page narrow center' },
           h('div', { class: 'card pad-lg mt-lg' },

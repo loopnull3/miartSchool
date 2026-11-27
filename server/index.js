@@ -11,6 +11,11 @@ import classRoutes from './routes/classes.js';
 import artworkRoutes from './routes/artworks.js';
 import templateRoutes from './routes/templates.js';
 import psychRoutes from './routes/psych.js';
+import checkinRoutes from './routes/checkins.js';
+import boardRoutes from './routes/boards.js';
+import lessonRoutes from './routes/lessons.js';
+import publicRoutes from './routes/public.js';
+import { backfillStudentLogins } from './routes/classes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '..');
@@ -70,13 +75,19 @@ export function createApp() {
   app.use('/api', artworkRoutes);
   app.use('/api', templateRoutes);
   app.use('/api', psychRoutes);
+  app.use('/api', checkinRoutes);
+  app.use('/api', boardRoutes);
+  app.use('/api', lessonRoutes);
+  app.use('/api', publicRoutes);
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, '없는 API입니다.')));
 
   // 정적 파일 (프런트엔드 + 공용 모듈)
   app.use('/shared', express.static(path.join(ROOT, 'shared'), { maxAge: '1h' }));
   app.use(express.static(path.join(ROOT, 'public'), { maxAge: '1h', index: 'index.html' }));
-  app.get('/{*splat}', (_req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));
+  // SPA: 확장자 없는 경로만 index.html (없는 정적 파일은 404)
+  app.get('/{*splat}', (req, res, next) => (path.extname(req.path) ? next() : res.sendFile(path.join(ROOT, 'public', 'index.html'))));
+  app.use((_req, res) => res.status(404).type('text/plain').send('Not found'));
 
   // 오류 처리
   // eslint-disable-next-line no-unused-vars
@@ -94,6 +105,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   loadEnv();
   openDb();
   ensureAdmin();
+  backfillStudentLogins();
   purgeExpiredSessions();
   setInterval(purgeExpiredSessions, 3600_000).unref();
   const port = Number(process.env.PORT || 3000);

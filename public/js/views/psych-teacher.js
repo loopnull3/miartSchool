@@ -1,6 +1,6 @@
 // 교사: 그림 마음 탐색 학급 리포트 / 학생별 리포트
 import { api } from '../api.js';
-import { h, clear, toast, toastError, confirmDialog, fmtDateTime, loading } from '../ui.js';
+import { h, clear, fill, toast, toastError, confirmDialog, fmtDateTime, loading } from '../ui.js';
 import { go, shell } from '../app.js';
 import { DOMAINS, MIND_WEATHER, PSYCH_STEPS, PSYCH_DISCLAIMER } from '/shared/psych-questions.js';
 
@@ -183,7 +183,7 @@ export async function studentReport({ params }) {
   async function generate(e) {
     const btn = e?.currentTarget;
     if (btn) btn.disabled = true;
-    clear(aiBox).append(h('div', { class: 'card center' }, loading(), h('p', { class: 'muted' }, 'AI가 그림을 살펴보고 있어요… (30초~1분)')));
+    fill(aiBox, h('div', { class: 'card center' }, loading(), h('p', { class: 'muted' }, 'AI가 그림을 살펴보고 있어요… (30초~1분)')));
     try {
       r.ai = await api.post(`/psych/results/${r.id}/ai-summary`);
       renderAi(r.ai);

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { one, all, run } from '../db.js';
+import { one, run } from '../db.js';
 import {
   HttpError,
   hashPassword,
@@ -78,39 +78,44 @@ r.get('/auth/me', (req, res) => {
   res.json({
     kind: 'student',
     student: a.student,
-    klass: { id: a.klass.id, name: a.klass.name, grade: a.klass.grade, ai_enabled: !!a.klass.ai_enabled, gallery_enabled: !!a.klass.gallery_enabled },
+    klass: {
+      id: a.klass.id,
+      name: a.klass.name,
+      grade: a.klass.grade,
+      ai_enabled: !!a.klass.ai_enabled,
+      gallery_enabled: !!a.klass.gallery_enabled,
+      checkin_enabled: !!a.klass.checkin_enabled,
+    },
   });
 });
 
-// 학생 로그인 1단계: 학급 코드로 학급과 학생 목록 조회 (PIN 제외)
-r.get('/join/:code', (req, res) => {
-  checkRateLimit(`join:${req.ip}`, 60, 10 * 60_000);
-  const code = String(req.params.code || '').trim().toUpperCase();
-  const klass = one(
-    `SELECT c.id, c.name, c.grade, u.name AS teacher_name, u.school_name
-       FROM classes c JOIN users u ON u.id = c.teacher_id
-      WHERE c.code = ? AND c.archived = 0 AND u.status = 'active'`,
-    code,
-  );
-  if (!klass) throw new HttpError(404, '학급 코드를 찾을 수 없어요. 선생님께 코드를 다시 확인해 주세요.');
-  const students = all('SELECT id, name, number, avatar FROM students WHERE class_id = ? ORDER BY number IS NULL, number, name', klass.id);
-  res.json({ klass, students });
-});
-
-// 학생 로그인 2단계: 학생 선택 + PIN
-r.post('/auth/student-login', (req, res) => {
-  const { code, studentId, pin } = req.body || {};
-  const sid = Number(studentId);
-  checkRateLimit(`pin:${sid}`, 10, 10 * 60_000);
-  const student = one(
-    `SELECT s.* FROM students s JOIN classes c ON c.id = s.class_id
-      WHERE s.id = ? AND c.code = ? AND c.archived = 0`,
-    sid,
+// 학생 로그인 1단계: 개인 참여 코드(또는 QR) 확인 → 이름·아바타만 알려 준다
+function studentByCode(code) {
+  return one(
+    `SELECT s.*, c.name AS class_name FROM students s JOIN classes c ON c.id = s.class_id
+       JOIN users u ON u.id = c.teacher_id
+      WHERE s.access_code = ? AND c.archived = 0 AND u.status = 'active'`,
     String(code || '').trim().toUpperCase(),
   );
-  if (!student || String(pin || '') !== student.pin) throw new HttpError(401, '비밀번호가 맞지 않아요. 다시 눌러 볼까요?');
-  clearRateLimit(`pin:${sid}`);
-  createSession(res, 'student', student.id);
+}
+
+r.post('/auth/student/code', (req, res) => {
+  checkRateLimit(`code:${req.ip}`, 40, 10 * 60_000);
+  const s = studentByCode(req.body?.code);
+  if (!s) throw new HttpError(404, '참여 코드를 찾을 수 없어요. 선생님께 받은 카드를 다시 확인해 주세요.');
+  res.json({ student: { name: s.name, avatar: s.avatar, className: s.class_name } });
+});
+
+// 학생 로그인 2단계: 동물 + 과일
+r.post('/auth/student/login', (req, res) => {
+  const s = studentByCode(req.body?.code);
+  if (!s) throw new HttpError(404, '참여 코드를 찾을 수 없어요.');
+  checkRateLimit(`pic:${s.id}`, 8, 10 * 60_000);
+  if (String(req.body?.animal || '') !== s.animal || String(req.body?.fruit || '') !== s.fruit) {
+    throw new HttpError(401, '동물이나 과일이 맞지 않아요. 카드를 보고 다시 골라 볼까요?');
+  }
+  clearRateLimit(`pic:${s.id}`);
+  createSession(res, 'student', s.id);
   res.json({ ok: true });
 });
 

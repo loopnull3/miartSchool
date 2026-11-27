@@ -1,6 +1,6 @@
 // 도안 만들기: 기본 도안 · 사진으로 만들기 · AI로 만들기 · 내 도안 / 과제용 도안 선택기
 import { api } from '../api.js';
-import { h, clear, toast, toastError, modal, confirmDialog, emptyState, loading, debounce } from '../ui.js';
+import { h, clear, fill, toast, toastError, modal, confirmDialog, emptyState, loading, debounce } from '../ui.js';
 import { go, shell, session } from '../app.js';
 import { BUILTIN_TEMPLATES, svgDataUrl, svgToPng, canvasThumb } from '../templates.js';
 import { photoToLineArt, fileToImage } from '../photo-sketch.js';
@@ -84,11 +84,11 @@ async function photoTab(root) {
 
   const process = debounce(() => {
     if (!img) return;
-    clear(after).append(h('div', { class: 'spinner' }));
+    fill(after, h('div', { class: 'spinner' }));
     setTimeout(() => {
       try {
         result = photoToLineArt(img, { detail: Number(detail.value) / 100, thickness: Number(thick.value) });
-        clear(after).append(result);
+        fill(after, result);
         actions.classList.remove('hidden');
       } catch (ex) {
         toastError(ex);
@@ -108,7 +108,7 @@ async function photoTab(root) {
         c.width = Math.round(img.width * s);
         c.height = Math.round(img.height * s);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        clear(before).append(c);
+        fill(before, c);
         title.value = f.name.replace(/\.[^.]+$/, '').slice(0, 30) || '사진 도안';
         process();
       } catch (ex) {
@@ -161,7 +161,7 @@ async function aiTab(root) {
 
   const showSuggestions = (ids, msg) => {
     const items = BUILTIN_TEMPLATES.filter((t) => ids?.includes(t.id));
-    clear(out).append(
+    fill(out, 
       h('div', { class: 'notice warn' }, msg),
       items.length
         ? h('div', { class: 'mt' }, h('h3', null, '비슷한 기본 도안'), h('div', { class: 'tpl-grid' }, items.map((t) => h('button', { class: 'tpl', onclick: () => go(`/draw?template=${encodeURIComponent(t.id)}`) }, h('div', { class: 'tpl-img' }, h('img', { src: svgDataUrl(t.svg), alt: t.title })), t.title))))
@@ -173,12 +173,12 @@ async function aiTab(root) {
     const text = prompt.value.trim();
     if (!text) return toast('어떤 그림을 원하는지 적어 주세요.');
     genBtn.disabled = true;
-    clear(out).append(h('div', { class: 'card center' }, h('div', { class: 'spinner', style: { margin: '10px auto' } }), h('p', { class: 'muted' }, 'AI가 도안을 그리고 있어요… (30초~1분 정도 걸려요)')));
+    fill(out, h('div', { class: 'card center' }, h('div', { class: 'spinner', style: { margin: '10px auto' } }), h('p', { class: 'muted' }, 'AI가 도안을 그리고 있어요… (30초~1분 정도 걸려요)')));
     try {
       const r = await api.post('/ai/sketch', { prompt: text });
       current = r;
       title.value = r.title;
-      clear(out).append(
+      fill(out, 
         h('div', { class: 'card' },
           h('img', { src: svgDataUrl(r.svg), alt: r.title, style: { width: '100%', maxWidth: '720px', margin: '0 auto', background: '#fff', borderRadius: '14px', border: '1px solid var(--line)' } }),
           h('div', { class: 'row mt' },
@@ -191,7 +191,7 @@ async function aiTab(root) {
       );
     } catch (ex) {
       if (ex.data?.suggestions) showSuggestions(ex.data.suggestions, ex.message);
-      else clear(out).append(h('div', { class: 'notice danger' }, ex.message));
+      else fill(out, h('div', { class: 'notice danger' }, ex.message));
     } finally {
       genBtn.disabled = false;
     }
@@ -274,7 +274,7 @@ export function templatePicker({ allowNone = true, current = null } = {}) {
         area.append(loading());
         try {
           const list = await api.get('/templates');
-          clear(area).append(
+          fill(area, 
             list.length
               ? h('div', { class: 'tpl-grid' }, list.map((t) => h('button', { class: `tpl ${current === t.ref ? 'active' : ''}`, onclick: () => finish(t.ref) }, h('div', { class: 'tpl-img' }, h('img', { src: `/api/templates/${t.id}/image?thumb=1`, alt: t.title })), t.title)))
               : emptyState('📁', '저장한 도안이 없어요', '"도안 만들기" 메뉴에서 사진이나 AI로 도안을 만들 수 있어요.'),

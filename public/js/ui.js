@@ -31,6 +31,13 @@ export function clear(el) {
   return el;
 }
 
+// 비우고 다시 채우기 (null·false는 건너뛰고 배열은 펼친다)
+export function fill(el, ...children) {
+  clear(el);
+  append(el, children);
+  return el;
+}
+
 export function toast(message, kind = '') {
   const root = document.getElementById('toast-root');
   const t = h('div', { class: `toast ${kind}`, role: 'status' }, message);
@@ -70,7 +77,7 @@ export function modal({ title, body, wide = false, actions = [], onClose } = {})
   const box = h(
     'div',
     { class: `modal ${wide ? 'wide' : ''}`, role: 'dialog', 'aria-modal': 'true' },
-    h('div', { class: 'modal-head' }, h('h2', null, title || ''), h('button', { class: 'btn ghost icon', type: 'button', 'aria-label': '닫기', onclick: close }, '✕')),
+    h('div', { class: 'modal-head' }, h('h2', null, title || ''), h('button', { class: 'modal-close', type: 'button', 'aria-label': '닫기', onclick: close }, '✕')),
     body,
     actionEls.length ? h('div', { class: 'row end mt' }, actionEls) : null,
   );
@@ -163,4 +170,18 @@ export function debounce(fn, ms) {
     clearTimeout(t);
     t = setTimeout(() => fn(...args), ms);
   };
+}
+
+// SF Symbols 느낌의 작은 아이콘
+const ICONS = {
+  play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>',
+  pause: '<rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/>',
+  left: '<path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  right: '<path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+};
+export function icon(name, size = 18) {
+  const span = document.createElement('span');
+  span.style.display = 'inline-grid';
+  span.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+  return span;
 }

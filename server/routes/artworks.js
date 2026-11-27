@@ -29,6 +29,7 @@ function publicArtwork(a) {
     assignment_id: a.assignment_id,
     assignment_title: a.assignment_title ?? null,
     template_ref: a.template_ref,
+    technique: a.technique || 'watercolor',
     width: a.width,
     height: a.height,
     exhibited: !!a.exhibited,
@@ -91,8 +92,8 @@ r.post('/artworks', (req, res) => {
   const draft = b.draft ? saveDraft(null, b.draft) : null;
   if (submit && !image) throw new HttpError(400, '제출할 그림이 없습니다.');
   const info = run(
-    `INSERT INTO artworks (student_id, class_id, assignment_id, title, template_ref, width, height, image_file, thumb_file, draft_file, stats_json, status, submitted_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO artworks (student_id, class_id, assignment_id, title, template_ref, width, height, image_file, thumb_file, draft_file, stats_json, status, submitted_at, technique)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     student.id,
     klass.id,
     assignmentId,
@@ -106,6 +107,7 @@ r.post('/artworks', (req, res) => {
     parseStats(b.stats),
     submit ? 'submitted' : 'draft',
     submit ? new Date().toISOString() : null,
+    b.technique === 'oil' ? 'oil' : 'watercolor',
   );
   res.json(publicArtwork(getArtwork(Number(info.lastInsertRowid))));
 });
@@ -242,17 +244,77 @@ r.get('/classes/:id/artworks', (req, res) => {
 });
 
 // 학생: 홈 화면 데이터
-r.get('/student/home', (req, res) => {
+export function assignmentView(g) {
+  const now = new Date().toISOString();
+  return {
+    id: g.id,
+    title: g.title,
+    description: g.description,
+    template_ref: g.template_ref,
+    orientation: g.orientation,
+    technique: g.technique || 'watercolor',
+    paper: g.paper,
+    steps: g.steps_json ? JSON.parse(g.steps_json) : [],
+    materials: g.materials_json ? JSON.parse(g.materials_json) : [],
+    start_at: g.start_at,
+    end_at: g.end_at,
+    due_date: g.due_date,
+    created_at: g.created_at,
+    closed: g.status === 'closed' || (g.end_at != null && g.end_at < now),
+    submitted_id: g.submitted_id ?? null,
+    draft_id: g.draft_id ?? null,
+  };
+}
+
+r.get('/student/assignments', (req, res) => {
   const { student, klass } = requireStudent(req);
-  const assignments = all(
-    `SELECT g.id, g.title, g.description, g.template_ref, g.orientation, g.due_date, g.created_at,
-            (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'submitted' LIMIT 1) AS submitted_id,
+  const now = new Date().toISOString();
+  const rows = all(
+    `SELECT g.*,
+            (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'submitted' ORDER BY a.submitted_at DESC LIMIT 1) AS submitted_id,
             (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'draft' ORDER BY a.updated_at DESC LIMIT 1) AS draft_id
-       FROM assignments g WHERE g.class_id = ? AND g.status = 'open' ORDER BY g.created_at DESC`,
+       FROM assignments g WHERE g.class_id = ? AND (g.start_at IS NULL OR g.start_at <= ?)
+      ORDER BY g.created_at DESC`,
     student.id,
     student.id,
     klass.id,
+    now,
   );
+  res.json(rows.map(assignmentView));
+});
+
+r.get('/student/assignments/:id', (req, res) => {
+  const { student, klass } = requireStudent(req);
+  const g = one(
+    `SELECT g.*,
+            (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'submitted' ORDER BY a.submitted_at DESC LIMIT 1) AS submitted_id,
+            (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'draft' ORDER BY a.updated_at DESC LIMIT 1) AS draft_id
+       FROM assignments g WHERE g.id = ? AND g.class_id = ?`,
+    student.id,
+    student.id,
+    Number(req.params.id),
+    klass.id,
+  );
+  if (!g || (g.start_at && g.start_at > new Date().toISOString())) throw new HttpError(404, '과제를 찾을 수 없어요.');
+  res.json(assignmentView(g));
+});
+
+r.get('/student/home', (req, res) => {
+  const { student, klass } = requireStudent(req);
+  const now = new Date().toISOString();
+  const assignments = all(
+    `SELECT g.*,
+            (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'submitted' LIMIT 1) AS submitted_id,
+            (SELECT a.id FROM artworks a WHERE a.assignment_id = g.id AND a.student_id = ? AND a.status = 'draft' ORDER BY a.updated_at DESC LIMIT 1) AS draft_id
+       FROM assignments g WHERE g.class_id = ? AND g.status = 'open' AND (g.start_at IS NULL OR g.start_at <= ?)
+         AND (g.end_at IS NULL OR g.end_at >= ?)
+      ORDER BY g.created_at DESC`,
+    student.id,
+    student.id,
+    klass.id,
+    now,
+    now,
+  ).map(assignmentView);
   const psych = all(
     `SELECT p.id, p.title, p.created_at,
             EXISTS (SELECT 1 FROM psych_results r WHERE r.campaign_id = p.id AND r.student_id = ?) AS done
@@ -260,8 +322,16 @@ r.get('/student/home', (req, res) => {
     student.id,
     klass.id,
   );
-  const newFeedback = one("SELECT COUNT(*) n FROM artworks WHERE student_id = ? AND seen_feedback = 0", student.id).n;
-  res.json({ student, klass: { name: klass.name, grade: klass.grade, ai_enabled: !!klass.ai_enabled, gallery_enabled: !!klass.gallery_enabled }, assignments, psych, newFeedback });
+  const newFeedback = one('SELECT COUNT(*) n FROM artworks WHERE student_id = ? AND seen_feedback = 0', student.id).n;
+  const recent = all("SELECT * FROM artworks WHERE student_id = ? ORDER BY updated_at DESC LIMIT 6", student.id).map(publicArtwork);
+  res.json({
+    student,
+    klass: { name: klass.name, grade: klass.grade, ai_enabled: !!klass.ai_enabled, gallery_enabled: !!klass.gallery_enabled, checkin_enabled: !!klass.checkin_enabled },
+    assignments,
+    psych,
+    newFeedback,
+    recent,
+  });
 });
 
 r.get('/student/artworks', (req, res) => {

@@ -20,18 +20,25 @@ export async function drawPage({ query }) {
   if (isStudent && artworkId) {
     const r = await api.get(`/artworks/${artworkId}/draft`);
     templateRef = r.artwork.template_ref;
+    query.technique = r.artwork.technique;
     title = r.artwork.title;
     size = [r.artwork.width, r.artwork.height];
     draft = r.draft;
     if (r.artwork.assignment_id) assignment = { id: r.artwork.assignment_id };
   }
-  if (isStudent && query.assignment) {
-    const home = await api.get('/student/home');
-    const g = home.assignments.find((x) => x.id === Number(query.assignment));
-    if (!g) throw new Error('과제를 찾을 수 없어요. 이미 마감되었을 수 있어요.');
+  let technique = query.technique === 'oil' ? 'oil' : 'watercolor';
+  if (isStudent && (query.assignment || assignment?.id)) {
+    const g = await api.get(`/student/assignments/${query.assignment || assignment.id}`).catch((e) => {
+      if (query.assignment) throw e;
+      return null;
+    });
     assignment = g;
+  }
+  if (assignment) {
+    const g = assignment;
     templateRef = templateRef || g.template_ref;
-    orientation = g.orientation;
+    if (!size) orientation = g.orientation;
+    technique = g.technique || technique;
     title = title || g.title;
   }
   const [W, H] = size || SIZES[orientation];
@@ -49,6 +56,7 @@ export async function drawPage({ query }) {
         width: W,
         height: H,
         templateRef,
+        technique,
         assignmentId: assignment?.id ?? null,
         image: studio.exportPNG(),
         thumb: studio.thumb(480),
@@ -75,6 +83,7 @@ export async function drawPage({ query }) {
       icon: '📮',
       primary: true,
       onClick: async () => {
+        if (assignment?.closed) return toast('마감된 과제예요. 임시저장은 할 수 있어요.');
         if (studio.isEmpty()) return toast('아직 그린 게 없어요. 그림을 그려 보세요!');
         modal({
           title: assignment ? '과제를 제출할까요?' : '선생님께 보낼까요?',
@@ -94,9 +103,14 @@ export async function drawPage({ query }) {
   ];
   const teacherActions = [{ label: '내려받기', icon: '⬇', primary: true, onClick: () => downloadDataUrl(studio.exportPNG(), `${studio.getTitle() || '미아트'}.png`) }];
 
+  const guide = assignment ? { title: assignment.title, description: assignment.description || '', steps: assignment.steps || [] } : null;
   studio = createStudio(wrap, {
     width: W,
     height: H,
+    technique,
+    paper: assignment?.paper || undefined,
+    guide: guide && (guide.description || guide.steps.length) ? guide : null,
+    materials: assignment?.materials || [],
     title: title || (isStudent ? '' : '드로잉 체험'),
     titleEditable: isStudent,
     actions: isStudent ? studentActions : teacherActions,
@@ -131,7 +145,38 @@ export async function drawPage({ query }) {
       .catch(() => toast('도안을 불러오지 못했어요.', 'error'));
   }
   if (draft) await studio.loadDraft(draft);
-  if (assignment?.description) studio.setHint(`📝 ${assignment.description}`, 6000);
+  if (assignment?.closed) studio.setHint('⏰ 마감된 과제예요', 4000);
+  else if (assignment?.description) studio.setHint(`📝 ${assignment.description.split('\n')[0]}`, 6000);
   else if (!draft && templateRef) studio.setHint('🪣 채우기 도구로 톡! 누르면 선 안쪽이 칠해져요', 4000);
+  return wrap;
+}
+
+// 공개 체험: 로그인 없이 수채화 / 유화 도구 써 보기 (저장 없음)
+export async function tryPage({ params, query }) {
+  const technique = params.technique === 'oil' ? 'oil' : 'watercolor';
+  const wrap = h('div');
+  const studio = createStudio(wrap, {
+    width: 1600,
+    height: 1200,
+    technique,
+    title: technique === 'oil' ? '유화 체험' : '수채화 체험',
+    guide: {
+      title: technique === 'oil' ? '유화 체험' : '수채화 체험',
+      description: '설치나 가입 없이 바로 그려 보세요. 체험 그림은 저장되지 않아요. 마음에 들면 내려받을 수 있어요.',
+      steps: technique === 'oil'
+        ? ['유화 붓 호수(1~6호)를 바꿔 가며 칠해 보세요.', '스머지로 물감을 문질러 섞어 보세요.', '헝겊으로 살살 닦아 내면 물감이 옅어져요.']
+        : ['수채화 붓으로 겹쳐 칠하면 색이 진해져요.', '넓은 수채화 붓으로 하늘을 칠해 보세요.', '꽃 브러시로 꽃길을 그려 보세요.'],
+    },
+    actions: [
+      { label: '내려받기', icon: '⬇', hideSm: true, onClick: () => downloadDataUrl(studio.exportPNG(), `미아트스쿨-${technique}.png`) },
+      { label: '무료로 시작하기', primary: true, onClick: () => go('/register') },
+    ],
+    onExit: () => go('/'),
+  });
+  onLeave(() => studio.destroy());
+  if (query.template) {
+    loadTemplateLayer(query.template, 1600, 1200).then((t) => t && studio.setTemplate(t.canvas)).catch(() => {});
+  }
+  studio.setHint('체험 그림은 저장되지 않아요', 3500);
   return wrap;
 }

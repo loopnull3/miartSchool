@@ -33,6 +33,18 @@ export function randomCode(len = 6) {
   return out;
 }
 
+// 학생 개인 참여 코드 (전체에서 유일)
+export function newAccessCode(exists) {
+  let code;
+  do code = randomCode(6);
+  while (exists(code));
+  return code;
+}
+
+export function randomPick(list) {
+  return list[crypto.randomInt(0, list.length)];
+}
+
 export function randomPin() {
   return String(crypto.randomInt(0, 10000)).padStart(4, '0');
 }
@@ -85,7 +97,11 @@ export function sessionMiddleware(req, _res, next) {
   } else {
     const student = one('SELECT id, class_id, name, number, avatar FROM students WHERE id = ?', s.subject_id);
     if (student) {
-      const klass = one('SELECT id, name, grade, code, teacher_id, ai_enabled, gallery_enabled, archived FROM classes WHERE id = ?', student.class_id);
+      const klass = one(
+        `SELECT c.id, c.name, c.grade, c.code, c.teacher_id, c.ai_enabled, c.gallery_enabled, c.checkin_enabled, c.archived, u.school_id
+           FROM classes c JOIN users u ON u.id = c.teacher_id WHERE c.id = ?`,
+        student.class_id,
+      );
       if (klass && !klass.archived) req.auth = { kind: 'student', student, klass };
     }
   }

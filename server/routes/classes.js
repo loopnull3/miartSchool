@@ -1,10 +1,27 @@
 // 교사용: 학급 · 학생 · 과제 관리
 import { Router } from 'express';
 import { one, all, run, tx } from '../db.js';
-import { HttpError, requireTeacher, requireOwnedClass, randomCode, randomPin } from '../auth.js';
+import { HttpError, requireTeacher, requireOwnedClass, randomCode, randomPin, newAccessCode, randomPick } from '../auth.js';
+import { ANIMALS, FRUITS } from '../../shared/login-pictures.js';
 
 const r = Router();
 const AVATARS = ['🐣', '🐰', '🐻', '🐼', '🦊', '🐯', '🐨', '🐸', '🐵', '🦁', '🐶', '🐱', '🐹', '🐧', '🦄', '🐙', '🐳', '🦖', '🐝', '🦋'];
+
+function newStudentLogin() {
+  return {
+    access_code: newAccessCode((c) => !!one('SELECT id FROM students WHERE access_code = ?', c)),
+    animal: randomPick(ANIMALS).key,
+    fruit: randomPick(FRUITS).key,
+  };
+}
+
+// 예전 데이터(PIN만 있던 학생)에 참여 코드 채우기
+export function backfillStudentLogins() {
+  for (const st of all('SELECT id FROM students WHERE access_code IS NULL OR animal IS NULL OR fruit IS NULL')) {
+    const l = newStudentLogin();
+    run('UPDATE students SET access_code = ?, animal = ?, fruit = ? WHERE id = ?', l.access_code, l.animal, l.fruit, st.id);
+  }
+}
 
 function uniqueClassCode() {
   let code;
@@ -61,12 +78,13 @@ r.patch('/classes/:id', (req, res) => {
   const name = b.name != null ? String(b.name).trim().slice(0, 40) : klass.name;
   if (!name) throw new HttpError(400, '학급 이름을 입력해 주세요.');
   run(
-    'UPDATE classes SET name = ?, grade = ?, ai_enabled = ?, gallery_enabled = ?, archived = ? WHERE id = ?',
+    'UPDATE classes SET name = ?, grade = ?, ai_enabled = ?, gallery_enabled = ?, archived = ?, checkin_enabled = ? WHERE id = ?',
     name,
     b.grade != null ? String(b.grade).trim().slice(0, 20) || null : klass.grade,
     b.ai_enabled != null ? (b.ai_enabled ? 1 : 0) : klass.ai_enabled,
     b.gallery_enabled != null ? (b.gallery_enabled ? 1 : 0) : klass.gallery_enabled,
     b.archived != null ? (b.archived ? 1 : 0) : klass.archived,
+    b.checkin_enabled != null ? (b.checkin_enabled ? 1 : 0) : klass.checkin_enabled,
     klass.id,
   );
   res.json(one('SELECT * FROM classes WHERE id = ?', klass.id));
@@ -105,7 +123,18 @@ r.post('/classes/:id/students', (req, res) => {
   const created = tx(() =>
     parsed.map((p, i) => {
       const avatar = AVATARS[(existing + i) % AVATARS.length];
-      const info = run('INSERT INTO students (class_id, name, number, pin, avatar) VALUES (?, ?, ?, ?, ?)', klass.id, p.name, p.number, randomPin(), avatar);
+      const l = newStudentLogin();
+      const info = run(
+        'INSERT INTO students (class_id, name, number, pin, avatar, access_code, animal, fruit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        klass.id,
+        p.name,
+        p.number,
+        randomPin(),
+        avatar,
+        l.access_code,
+        l.animal,
+        l.fruit,
+      );
       return one('SELECT * FROM students WHERE id = ?', Number(info.lastInsertRowid));
     }),
   );
@@ -126,14 +155,27 @@ r.patch('/students/:id', (req, res) => {
   if (!name) throw new HttpError(400, '이름을 입력해 주세요.');
   const number = b.number === '' || b.number === null ? null : b.number != null ? Number(b.number) : s.number;
   const avatar = b.avatar && AVATARS.includes(b.avatar) ? b.avatar : s.avatar;
-  let pin = s.pin;
-  if (b.resetPin) pin = randomPin();
-  else if (b.pin != null) {
-    if (!/^\d{4}$/.test(String(b.pin))) throw new HttpError(400, 'PIN은 숫자 4자리입니다.');
-    pin = String(b.pin);
+  let { access_code: code, animal, fruit } = s;
+  if (b.resetLogin) ({ access_code: code, animal, fruit } = newStudentLogin());
+  if (b.animal != null) {
+    if (!ANIMALS.some((a) => a.key === b.animal)) throw new HttpError(400, '동물 값이 올바르지 않습니다.');
+    animal = b.animal;
   }
-  run('UPDATE students SET name = ?, number = ?, avatar = ?, pin = ? WHERE id = ?', name, Number.isFinite(number) ? number : null, avatar, pin, s.id);
-  if (pin !== s.pin || b.resetPin) run("DELETE FROM sessions WHERE kind = 'student' AND subject_id = ?", s.id);
+  if (b.fruit != null) {
+    if (!FRUITS.some((f) => f.key === b.fruit)) throw new HttpError(400, '과일 값이 올바르지 않습니다.');
+    fruit = b.fruit;
+  }
+  run(
+    'UPDATE students SET name = ?, number = ?, avatar = ?, access_code = ?, animal = ?, fruit = ? WHERE id = ?',
+    name,
+    Number.isFinite(number) ? number : null,
+    avatar,
+    code,
+    animal,
+    fruit,
+    s.id,
+  );
+  if (b.resetLogin || animal !== s.animal || fruit !== s.fruit) run("DELETE FROM sessions WHERE kind = 'student' AND subject_id = ?", s.id);
   res.json(one('SELECT * FROM students WHERE id = ?', s.id));
 });
 
@@ -154,21 +196,63 @@ function validTemplateRef(ref) {
   throw new HttpError(400, '도안 정보가 올바르지 않습니다.');
 }
 
-r.post('/classes/:id/assignments', (req, res) => {
-  const { klass } = requireOwnedClass(req, req.params.id);
-  const b = req.body || {};
+const TECHNIQUES = ['watercolor', 'oil'];
+const PAPERS = ['white', 'ivory', 'kraft', 'black', 'watercolor', 'canvas'];
+
+function cleanDateTime(v) {
+  if (v == null || v === '') return null;
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) throw new HttpError(400, '날짜 형식이 올바르지 않습니다.');
+  return d.toISOString();
+}
+
+function cleanSteps(v) {
+  if (!Array.isArray(v)) return null;
+  const steps = v.map((x) => String(x).trim().slice(0, 300)).filter(Boolean).slice(0, 12);
+  return steps.length ? JSON.stringify(steps) : null;
+}
+
+export function cleanMaterials(v) {
+  if (!Array.isArray(v)) return null;
+  const out = [];
+  for (const m of v.slice(0, 10)) {
+    const url = String(m?.url || '').trim();
+    if (!/^https:\/\/[^\s]+$/i.test(url) || url.length > 500) continue;
+    const type = ['youtube', 'link', 'image'].includes(m.type) ? m.type : /youtu\.?be/.test(url) ? 'youtube' : 'link';
+    out.push({ type, title: String(m.title || '').trim().slice(0, 60) || '수업 자료', url });
+  }
+  return out.length ? JSON.stringify(out) : null;
+}
+
+export function createAssignment(classId, b) {
   const title = String(b.title || '').trim().slice(0, 60);
   if (!title) throw new HttpError(400, '과제 제목을 입력해 주세요.');
+  const startAt = cleanDateTime(b.startAt);
+  const endAt = cleanDateTime(b.endAt);
+  if (startAt && endAt && endAt <= startAt) throw new HttpError(400, '마감 시간은 시작 시간보다 뒤여야 합니다.');
   const info = run(
-    'INSERT INTO assignments (class_id, title, description, template_ref, orientation, due_date) VALUES (?, ?, ?, ?, ?, ?)',
-    klass.id,
+    `INSERT INTO assignments (class_id, title, description, template_ref, orientation, due_date, start_at, end_at, technique, paper, steps_json, materials_json, lesson_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    classId,
     title,
-    String(b.description || '').trim().slice(0, 500) || null,
+    String(b.description || '').trim().slice(0, 1000) || null,
     validTemplateRef(b.templateRef),
     b.orientation === 'portrait' ? 'portrait' : 'landscape',
-    /^\d{4}-\d{2}-\d{2}$/.test(String(b.dueDate || '')) ? b.dueDate : null,
+    endAt ? endAt.slice(0, 10) : null,
+    startAt,
+    endAt,
+    TECHNIQUES.includes(b.technique) ? b.technique : 'watercolor',
+    PAPERS.includes(b.paper) ? b.paper : null,
+    cleanSteps(b.steps),
+    cleanMaterials(b.materials),
+    b.lessonId ? String(b.lessonId).slice(0, 60) : null,
   );
-  res.json(one('SELECT * FROM assignments WHERE id = ?', Number(info.lastInsertRowid)));
+  return one('SELECT * FROM assignments WHERE id = ?', Number(info.lastInsertRowid));
+}
+
+r.post('/classes/:id/assignments', (req, res) => {
+  const { klass } = requireOwnedClass(req, req.params.id);
+  res.json(createAssignment(klass.id, req.body || {}));
 });
 
 function ownedAssignment(req, id) {
@@ -181,13 +265,23 @@ function ownedAssignment(req, id) {
 r.patch('/assignments/:id', (req, res) => {
   const g = ownedAssignment(req, req.params.id);
   const b = req.body || {};
+  const startAt = b.startAt !== undefined ? cleanDateTime(b.startAt) : g.start_at;
+  const endAt = b.endAt !== undefined ? cleanDateTime(b.endAt) : g.end_at;
+  if (startAt && endAt && endAt <= startAt) throw new HttpError(400, '마감 시간은 시작 시간보다 뒤여야 합니다.');
   run(
-    'UPDATE assignments SET title = ?, description = ?, status = ?, due_date = ?, template_ref = ? WHERE id = ?',
+    `UPDATE assignments SET title = ?, description = ?, status = ?, template_ref = ?, start_at = ?, end_at = ?, due_date = ?,
+            technique = ?, paper = ?, steps_json = ?, materials_json = ? WHERE id = ?`,
     b.title != null ? String(b.title).trim().slice(0, 60) || g.title : g.title,
-    b.description != null ? String(b.description).trim().slice(0, 500) || null : g.description,
+    b.description != null ? String(b.description).trim().slice(0, 1000) || null : g.description,
     b.status === 'closed' || b.status === 'open' ? b.status : g.status,
-    b.dueDate !== undefined ? (/^\d{4}-\d{2}-\d{2}$/.test(String(b.dueDate || '')) ? b.dueDate : null) : g.due_date,
     b.templateRef !== undefined ? validTemplateRef(b.templateRef) : g.template_ref,
+    startAt,
+    endAt,
+    endAt ? endAt.slice(0, 10) : null,
+    TECHNIQUES.includes(b.technique) ? b.technique : g.technique,
+    b.paper !== undefined ? (PAPERS.includes(b.paper) ? b.paper : null) : g.paper,
+    b.steps !== undefined ? cleanSteps(b.steps) : g.steps_json,
+    b.materials !== undefined ? cleanMaterials(b.materials) : g.materials_json,
     g.id,
   );
   res.json(one('SELECT * FROM assignments WHERE id = ?', g.id));
