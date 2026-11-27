@@ -284,7 +284,7 @@ async function assignmentsTab(root, data) {
     for (const g of data.assignments) {
       const thumb = templateThumbSrc(g.template_ref);
       list.append(
-        h('div', { class: 'card row nowrap', style: { alignItems: 'center' } },
+        h('div', { class: 'card row teacher-assign', style: { alignItems: 'center' } },
           h('div', { style: { width: '96px', height: '72px', borderRadius: '12px', background: 'var(--surface-2)', display: 'grid', placeItems: 'center', overflow: 'hidden', flex: 'none', border: '1px solid var(--line)' } },
             thumb ? h('img', { src: thumb, alt: '', style: { width: '100%', height: '100%', objectFit: 'contain', background: '#fff' } }) : glyph(g.technique === 'oil' ? 'oil' : 'water', 30, 1.4)),
           h('div', { class: 'grow' },
