@@ -90,6 +90,69 @@ pkg install nodejs git
 git clone https://github.com/loopnull3/miartSchool && cd miartSchool && npm install && npm start
 ```
 
+## 서버에 올리기 (호스팅)
+
+필요한 것: Node.js 22.5 이상이 돌아가는 서버(또는 Docker), 그리고 HTTPS용 도메인. 데이터는 `DATA_DIR`(DB + 그림 파일) 한 폴더에 모두 저장됩니다.
+
+### 1) 리눅스 서버 + Docker (권장 — HTTPS 자동)
+
+1. 도메인의 A 레코드를 서버 IP로 연결하고, 서버 방화벽에서 80·443 포트를 엽니다.
+2. 소스를 서버에 올리고 압축을 풉니다.
+3. 설정 파일을 만듭니다.
+
+```bash
+cp .env.example .env
+```
+
+4. `.env`에서 `DOMAIN`(예: `miart.example.com`), `ADMIN_EMAIL`, `ADMIN_PASSWORD`(10자 이상)를 바꾸고, AI를 쓰려면 `ANTHROPIC_API_KEY`를 넣습니다.
+5. 실행합니다. Caddy가 인증서를 자동으로 받아 `https://도메인` 으로 열립니다.
+
+```bash
+docker compose up -d --build
+```
+
+- 상태·로그 확인: `docker compose ps`, `docker compose logs -f app`
+- 업데이트: 새 소스로 바꾼 뒤 `docker compose up -d --build` (데이터는 `miart-data` 볼륨에 남아 있음)
+- Docker Hub 요청 제한(429)이 나면 `docker compose build --build-arg NODE_IMAGE=public.ecr.aws/docker/library/node:22-bookworm-slim` 으로 빌드
+- 백업:
+
+```bash
+docker compose exec app node scripts/backup.js /data/backups
+```
+
+### 2) Docker 없이 (Ubuntu 등 + systemd + Caddy)
+
+1. Node.js 22.5 이상을 설치하고 소스를 `/opt/miartSchool`에 둡니다.
+2. 의존성을 설치합니다.
+
+```bash
+cd /opt/miartSchool && npm ci --omit=dev
+```
+
+3. `.env`를 만들고 `NODE_ENV=production`, `COOKIE_SECURE=true`, 관리자 계정을 설정합니다.
+4. `deploy/miart.service`를 `/etc/systemd/system/`에 복사하고(사용자·경로 확인) `sudo systemctl enable --now miart`
+5. Caddy를 설치하고 `deploy/Caddyfile.host`의 도메인을 바꿔 `/etc/caddy/Caddyfile`로 넣은 뒤 `sudo systemctl reload caddy`
+6. 백업은 `npm run backup` (서버를 멈추지 않고 DB를 안전하게 복사)
+
+### 3) 안드로이드 Termux
+
+```bash
+bash deploy/termux-start.sh
+```
+
+처음 실행하면 무작위 관리자 비밀번호를 만들어 화면과 `.env`에 남깁니다. 인터넷에서 접속하려면 다른 Termux 창에서 Cloudflare 터널을 엽니다(표시되는 `https://….trycloudflare.com` 주소로 접속, 고정 주소는 Cloudflare 계정의 이름 있는 터널 사용).
+
+```bash
+pkg install cloudflared && cloudflared tunnel --url http://localhost:3000
+```
+
+### 운영 체크리스트
+
+- 데모 데이터(`npm run seed`)는 운영 서버에서 실행하지 마세요(예시 계정·비밀번호가 만들어짐).
+- 관리자로 로그인해 **학교 인증 코드**를 만들고 선생님께 나눠 주면, 선생님이 가입 → 관리자 승인 → 학급·학생 등록 순서로 시작합니다.
+- `shared/site-config.js`의 요금·회사 정보, 랜딩 이용 후기를 실제 내용으로 바꿉니다.
+- QR 카메라 로그인은 HTTPS에서만 동작합니다.
+
 ## 운영 메모
 
 - **요금·회사 정보**: `shared/site-config.js`의 가격과 사업자 정보는 **예시 값**입니다. 실제 판매 가격과 회사 정보로 바꾸세요. 회사 정보가 비어 있으면 푸터에 표시하지 않습니다.
@@ -117,6 +180,8 @@ public/            빌드 없는 바닐라 JS 프런트엔드
   vendor/          qrcode-generator(MIT) · jsQR(Apache-2.0) · Pretendard(OFL)
   images/landing/  랜딩 기능 소개 이미지 (실제 앱 화면)
 test/              node:test
+deploy/            Caddyfile · systemd 서비스 · Termux 실행 스크립트
+Dockerfile, docker-compose.yml  운영 이미지 + 자동 HTTPS(Caddy)
 ```
 
 ## 테스트

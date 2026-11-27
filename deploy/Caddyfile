@@ -1,0 +1,8 @@
+# 도메인으로 접속하면 Caddy가 Let's Encrypt 인증서를 자동으로 받아 HTTPS로 연결합니다.
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 45MB
+	}
+	reverse_proxy app:3000
+}

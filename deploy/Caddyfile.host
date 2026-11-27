@@ -1,0 +1,9 @@
+# Docker 없이 쓸 때: 서버에 Caddy를 설치하고 /etc/caddy/Caddyfile 에 넣으세요.
+# miart.example.com 을 실제 도메인으로 바꾸면 HTTPS 인증서가 자동으로 발급됩니다.
+miart.example.com {
+	encode zstd gzip
+	request_body {
+		max_size 45MB
+	}
+	reverse_proxy 127.0.0.1:3000
+}

@@ -1,0 +1,23 @@
+# Docker 없이 리눅스 서버(Ubuntu 등)에서 실행할 때 쓰는 systemd 서비스
+#   sudo cp deploy/miart.service /etc/systemd/system/miart.service
+#   (User, WorkingDirectory 경로를 서버에 맞게 수정)
+#   sudo systemctl daemon-reload && sudo systemctl enable --now miart
+[Unit]
+Description=MiArt School
+After=network.target
+
+[Service]
+Type=simple
+User=miart
+WorkingDirectory=/opt/miartSchool
+Environment=NODE_ENV=production
+Environment=COOKIE_SECURE=true
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

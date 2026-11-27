@@ -1,0 +1,39 @@
+# 서버 한 대에 미아트스쿨 + 자동 HTTPS(Caddy)
+#   1) .env 파일에 DOMAIN, ADMIN_EMAIL, ADMIN_PASSWORD 설정
+#   2) docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /data
+      PORT: "3000"
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "loopback, uniquelocal"
+    volumes:
+      - miart-data:/data
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?.env 파일에 DOMAIN=도메인 을 넣어 주세요}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  miart-data:
+  caddy-data:
+  caddy-config:

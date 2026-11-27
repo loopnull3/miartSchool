@@ -3,7 +3,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { openDb, one, run } from './db.js';
+import { openDb, closeDb, one, run } from './db.js';
 import { sessionMiddleware, HttpError, hashPassword, purgeExpiredSessions } from './auth.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
@@ -32,11 +32,18 @@ function loadEnv() {
   }
 }
 
+const WEAK_PASSWORDS = new Set(['change-me-please', 'admin1234', 'password', '12345678', 'miart1234']);
+
 export function ensureAdmin() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) return;
   if (one("SELECT id FROM users WHERE role = 'admin'")) return;
+  // 운영 서버에서는 예시·짧은 비밀번호로 관리자를 만들지 않는다
+  if (process.env.NODE_ENV === 'production' && (WEAK_PASSWORDS.has(password) || password.length < 10)) {
+    console.error('[miart] ADMIN_PASSWORD가 예시 값이거나 너무 짧아요(10자 이상). .env에서 바꾼 뒤 다시 시작하면 관리자 계정이 만들어져요.');
+    return;
+  }
   if (one('SELECT id FROM users WHERE email = ?', email)) {
     run("UPDATE users SET role = 'admin', status = 'active' WHERE email = ?", email);
   } else {
@@ -48,7 +55,8 @@ export function ensureAdmin() {
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 'loopback');
+  // 리버스 프록시(Caddy·Nginx) 뒤에서 실제 접속 IP를 쓰기 위한 설정. Docker 구성은 'loopback, uniquelocal'
+  app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -110,8 +118,23 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   setInterval(purgeExpiredSessions, 3600_000).unref();
   const port = Number(process.env.PORT || 3000);
   const host = process.env.HOST || '0.0.0.0';
-  createApp().listen(port, host, () => {
+  const server = createApp().listen(port, host, () => {
     console.log(`[miart] 미아트스쿨 서버 실행 중: http://localhost:${port}`);
     if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) console.log('[miart] AI 키 없음 — AI 도안/AI 요약을 제외한 모든 기능이 동작합니다.');
+    if (process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'true') console.warn('[miart] 운영 모드인데 COOKIE_SECURE=true가 아니에요. HTTPS 뒤에서 운영하고 true로 설정하세요.');
   });
+  // 컨테이너·서비스 종료 시 DB를 깨끗하게 닫는다
+  let stopping = false;
+  const shutdown = (sig) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[miart] ${sig} — 서버를 종료합니다.`);
+    server.close(() => {
+      closeDb();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 8000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
